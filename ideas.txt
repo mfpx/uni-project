@@ -1,0 +1,3 @@
+Primary/Backup - in case master isn't responding, backup takes over
+    Maybe use DNS to update domain records, such that A points to backup if both nodes are on different public IPs
+    

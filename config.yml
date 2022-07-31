@@ -1,0 +1,4 @@
+hostname: "node"
+servers:
+        - "stumbra.co.uk"
+        - "google.co.uk"
