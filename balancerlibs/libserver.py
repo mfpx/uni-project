@@ -184,7 +184,7 @@ class ServerLibrary:
 #slib = ServerLibrary()
 #print(slib.getLatencyToMultipleHosts([["google.com", 64], ["qmul.ac.uk", 64], ["stumbra.co.uk", 64]], 0.5))
 
-hel = Helpers()
-hel.ConfigParser()
-slib = ServerLibrary()
-slib.pickLatencyHost()
+#hel = Helpers()
+#hel.ConfigParser()
+#slib = ServerLibrary()
+#slib.pickLatencyHost()

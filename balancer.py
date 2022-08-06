@@ -1,7 +1,8 @@
-import socket, asyncio, logging, struct
+import socket, asyncio, logging, struct, getopt, sys
 from fcntl import ioctl
 from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
+from balancerlibs.libsys import System
 from schedule import *
 # Load Balancer Core
 # HIGHLY EXPERIMENTAL - NATURALLY POC ONLY!
@@ -292,6 +293,17 @@ class ForwardIngress:
         if traffic != None:
             log.error("The request failed!")
 
-run_pending()
-fi = ForwardIngress()
-asyncio.run(fi.ingressServer())
+#run_pending()
+#fi = ForwardIngress()
+#asyncio.run(fi.ingressServer())
+
+if __name__ == "__main__":
+    system = System()
+
+    try:
+        argv = sys.argv[1:]
+        opts, args = getopt.getopt(argv, "hm:ni:", ["staticmtu=", "iface=", "nomtu"])
+        if len(opts) != 0:
+            system.cli(opts)
+    except getopt.GetoptError:
+        print("balancer.py [hmni] --staticmtu= --iface= --nomtu")
