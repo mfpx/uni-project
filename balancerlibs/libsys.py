@@ -9,7 +9,7 @@ class System:
             for opt, arg in opts:
                 if opt == '-h':
                     print("balancer.py [hmni] --staticmtu= --iface= --nomtu")
-                    sys.exit()
+                    sys.exit(1)
                 elif opt in ("-i", "--iface"):
                     iface = arg
                 elif opt in ("-m", "--staticmtu"):

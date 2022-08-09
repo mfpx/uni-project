@@ -1,16 +1,19 @@
 import socket, asyncio, logging, struct, getopt, sys
+import concurrent.futures
 from fcntl import ioctl
+from xmlrpc.client import Server
 from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
 from balancerlibs.libsys import System
 from schedule import *
+from datetime import datetime
 # Load Balancer Core
 # HIGHLY EXPERIMENTAL - NATURALLY POC ONLY!
 
 log = logging.getLogger(__name__)
 logging.basicConfig()
 
-SIOCGIFADDR = 0x8915 # FCNTL DEVICE CONTROL CODE - DO NOT MODIFY
+SIOCGIFADDR = 0x8915 # FCNTL SOCKET CONFIGURATION CONTROL CODE - DO NOT MODIFY (see sockios.h)
 """
 Get, set, or delete the address of the device using
 ifr_addr, or ifr6_addr with ifr6_prefixlen.  Setting or
@@ -28,20 +31,38 @@ Source: netdevice.7 manpage
 class Balancer:
 
 
-    # Selection algorithms: Lowest Latency (default), Round-Robin, ECMP (Equal Cost Multi Path)
-    def __init__(self, type, pmtu, ifname = 'eth0', timeout = 30, algorithm = "latency"):
+    # Selection algorithms: Lowest Latency (default), Round-Robin
+    def __init__(self, type, pmtu, ifname = 'eth0', timeout = 30, algorithm = "latency", name = "balancer"):
         self.type = type # Primary or Backup
         self.pmtu = pmtu # Packet MTU
         self.ifname = ifname # Local interface to use
         self.timeout = timeout
         self.algorithm = algorithm # Server selection algorithm
+        self.name = name # Balancer node name
 
 
     def __call__(self):
-        log.debug("Not yet implemented") # Do not call class directly
-        
+        log.debug("Not implemented") # Do not call class directly
 
-    def __setNodeConnectionTimeout(self, timeout) -> bool:
+
+    def boostrap(self, cfg):
+        self.cfg = cfg
+        now = datetime.now()
+        timedate = now.strftime("%H:%M:%S on %x")
+        slib = ServerLibrary()
+        host_ttl = []
+
+        print(f"--- Bootstrapping started at {timedate} ---")
+        ifip = self.getInterfaceIP(self.getInterface())
+        print(f"Interface {self.getInterface()} has IP {ifip}")
+        print(f"- Upstream node latency test started at {timedate} -")
+        for host in self.cfg["servers"]:
+            host_ttl.append([host, 64])
+        latencies = slib.getLatencyToMultipleHosts(host_ttl)
+
+
+        
+    def setNodeConnectionTimeout(self, timeout) -> bool:
         """
         Sets the node connection timeout in milliseconds
         This determines how long the node will wait for a response
@@ -61,7 +82,7 @@ class Balancer:
         return self.timeout
 
 
-    def __getType(self) -> str:
+    def getType(self) -> str:
         """Returns the mode of operation - primary or backup"""
         return self.type
 
@@ -74,7 +95,6 @@ class Balancer:
 
         if sysmtu != self.pmtu:
             log.warn("Interface MTU modified externally! Expected {} but found {}".format(self.pmtu, sysmtu))
-            # Maybe have CLI args to modify this behaviour?
             log.warn("MTU will now be reset to {} on interface {}".format(self.pmtu, self.ifname))
             lif.setMTU(self.pmtu)
 
@@ -98,12 +118,12 @@ class Balancer:
             return False
 
 
-    def __setInterface(self, interface) -> None:
+    def setInterface(self, interface) -> None:
         """Sets the interface to use for operation"""
         self.ifname = interface
 
 
-    def __getInterface(self) -> str:
+    def getInterface(self) -> str:
         """Returns the name of the current interface in use"""
         return self.ifname
 
@@ -115,51 +135,34 @@ class Balancer:
     def getSelectionAlgorithm(self) -> str:
         return self.algorithm
 
-
-    class IPConfig:
-
-        
-        def __init__(self, name) -> None:
-            self.name = name
-
-
-        def __getLocalIP(self) -> str:
-            """Returns a somewhat reliable LAN IP for the current node"""
-            return socket.gethostbyname(socket.gethostname())
+    
+    def getHostname(self) -> str:
+        """
+        Returns the node's hostname
+        Note: This is the device name, not the LB node name
+        """
+        return socket.gethostname()
 
 
-        def __getHostname(self) -> str:
-            """
-            Returns the node's hostname
-            Note: This is the device name, not the LB node name
-            """
-            return socket.gethostname()
+    def getInterfaceIP(self, interface) -> str:
+        """Returns the IP address of a specific interface"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return socket.inet_ntoa(ioctl
+                                (sock.fileno(),
+                                SIOCGIFADDR, # This shouldn't be a privileged request
+                                struct.pack(
+                                    '256s',
+                                    bytes(interface.encode("utf-8"))))[20:24]) # Struct takes char[]
 
 
-        def getInterfaceIP(self, interface) -> str:
-            """Returns the IP address of a specific interface"""
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            return socket.intet_ntoa(ioctl
-                                    (sock.fileno(),
-                                    SIOCGIFADDR, # This shouldn't be a privileged request
-                                    struct.pack(
-                                        '256s',
-                                        interface))[20:24]) # Struct takes char[]
+    def setNodeName(self, name) -> None:
+        """Sets the named node name for use in the network"""
+        self.name = name
 
 
-        def setNodeName(self, name) -> bool:
-            """Sets the named node name for use in the network"""
-            self.name = name
-
-            if self.name == name:
-                return True
-            else:
-                return False
-
-        
-        def getNodeName(self) -> str:
-            """Returns the named node name for use in the network"""
-            return self.name
+    def getNodeName(self) -> str | None:
+        """Returns the named node name for use in the network"""
+        return self.name
 
 
 # Balancer -> Dest. Host -> Client
@@ -167,10 +170,8 @@ class Balancer:
 class ForwardEgress:
 
 
-    def __init__(self, destination, destport) -> None:
-        self.iface = iface
-        self.bindip = bindip
-        self.bindport = bindport
+    def __init__(self, destination, destport, balancer) -> None:
+        self.balancer = balancer
         self.destination = destination
         self.destport = destport
 
@@ -186,10 +187,9 @@ class ForwardEgress:
 
     # This will block but that's okay
     def forwardTraffic(self, data, writer, wait) -> bool:
-        balancer = Balancer("primary", 1500)
 
         ingestServer = socket.socket(family = socket.AF_INET, type = socket.SOCK_STREAM, proto = 0)
-        ingestServer.settimeout(balancer.getNodeConnectionTimeout())
+        ingestServer.settimeout(self.balancer.getNodeConnectionTimeout())
         ingestServer.setblocking(True)
 
         # Socket options - Tested on kernel version 5.15.49
@@ -234,21 +234,21 @@ class ForwardEgress:
 class ForwardIngress:
 
 
-    def __init__(self, interface = 'eth0', ip = '0.0.0.0', port = 8000):
+    def __init__(self, balancer, interface = 'eth0', ip = '0.0.0.0', port = 8000):
         self.interface = interface
         self.bindip = ip
         self.port = port
+        self.balancer = balancer
 
         self.dest = 0
         self.destport = 80
 
     @repeat(every(5).seconds)
     def setHost(self):
-        balancer = Balancer("primary", 1500, "enp4s0")
         print("repeat got executed!")
 
         # Set host
-        if balancer.getSelectionAlgorithm() == "latency":
+        if self.balancer.getSelectionAlgorithm() == "latency":
             print("Determining the best host")
             host = ServerLibrary().pickLatencyHost()
 
@@ -268,8 +268,6 @@ class ForwardIngress:
     async def response(self, reader, writer): # NOTE: writer will write data back to client in this instance
         data = await reader.read(2048)
 
-        balancer = Balancer("primary", 1500, "enp4s0")
-
         size = Helpers().determinePayloadSize(data)
         log.warning(f"Client payload packet size is {size} bytes")
 
@@ -284,9 +282,9 @@ class ForwardIngress:
         data = bytestring.encode()
         # --- UGLY CODE END ---
 
-        if size > balancer.getMTU():
+        if size > self.balancer.getMTU():
             log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
-            balancer.setMTU(size)
+            self.balancer.setMTU(size)
 
         traffic = ForwardEgress(self.dest, self.destport).forwardTraffic(data, writer, True)
 
@@ -299,11 +297,28 @@ class ForwardIngress:
 
 if __name__ == "__main__":
     system = System()
+    helpers = Helpers()
 
     try:
         argv = sys.argv[1:]
-        opts, args = getopt.getopt(argv, "hm:ni:", ["staticmtu=", "iface=", "nomtu"])
+        opts, args = getopt.getopt(argv, "hm:ni:c:", ["staticmtu=", "iface=", "conf=", "nomtu"])
         if len(opts) != 0:
             system.cli(opts)
     except getopt.GetoptError:
-        print("balancer.py [hmni] --staticmtu= --iface= --nomtu")
+        print("balancer.py [hmnic] --staticmtu= --iface= --conf --nomtu")
+
+    cfg = helpers.ConfigParser()
+
+    balancer = Balancer(
+        cfg["node_type"], # Primary or Backup
+        cfg["default_pmtu"], # Default MTU value
+        cfg["ifname"], # Interface name
+        cfg["timeout"], # Connection timeout
+        cfg["algorithm"], # Round-robin or latency
+        None) # Node name - nothing by default
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
+        future = executor.submit(balancer.boostrap, cfg)
+        print(future.result())
+
+    ##balancer.boostrap()

@@ -1,3 +1,4 @@
+import random
 import time, os, asyncio, datetime, numpy, concurrent.futures, gc, ipaddress
 from time import sleep
 from ping3 import ping
@@ -17,7 +18,18 @@ class Helpers:
         configfile = open(config, 'r')
         configdict = load(configfile, Loader = Loader)
 
-        CONFIG_CONTENTS = {"hostname": str, "servers": list}
+        CONFIG_CONTENTS = {
+         "hostname": str,
+         "node_type": str,
+         "default_pmtu": int,
+         "ifname": str,
+         "timeout": int,
+         "algorithm": str,
+         "servers": list}
+
+        for key in CONFIG_CONTENTS:
+            if key not in configdict.keys():
+                raise KeyError(f"A required parameter {key} not found in the configuration file")
 
         for key in configdict:
             if not isinstance(configdict[key], CONFIG_CONTENTS[key]):
@@ -30,6 +42,27 @@ class Helpers:
                 print(f"\"{ipaddr}\" is not an IP, it will be parsed as a DNS name!")
 
         return configdict
+
+
+    def generateNodeName(self) -> str:
+        nouns = open("nouns.txt", "r")
+        adjectives = open("adjectives.txt", "r")
+
+        noun = self.__random_line(nouns).rstrip("\r\n").lower()
+        adjective = self.__random_line(adjectives).rstrip("\r\n").lower()
+
+        name = (adjective + " " + noun).replace(" ", "-")
+
+        return name
+
+    # Source: https://stackoverflow.com/questions/3540288/how-do-i-read-a-random-line-from-one-file
+    def __random_line(self, afile):
+        line = next(afile)
+        for num, aline in enumerate(afile, 2):
+            if random.randrange(num):
+                continue
+            line = aline
+        return line
 
 
     def determinePayloadSize(self, payload):
@@ -185,6 +218,7 @@ class ServerLibrary:
 #print(slib.getLatencyToMultipleHosts([["google.com", 64], ["qmul.ac.uk", 64], ["stumbra.co.uk", 64]], 0.5))
 
 #hel = Helpers()
+#print(hel.generateNodeName())
 #hel.ConfigParser()
 #slib = ServerLibrary()
 #slib.pickLatencyHost()

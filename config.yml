@@ -1,4 +1,9 @@
 hostname: "node"
+node_type: "primary"
+default_pmtu: 1500
+ifname: "enp4s0"
+timeout: 30
+algorithm: "latency"
 servers:
         - "stumbra.co.uk"
         - "google.co.uk"
