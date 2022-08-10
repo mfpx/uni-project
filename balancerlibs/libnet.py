@@ -39,7 +39,7 @@ except:
 class LibIface:
 
 
-    def __init__(self, ifname):
+    def __init__(self, ifname: str):
         self.ifname = ifname
 
     
@@ -47,7 +47,7 @@ class LibIface:
         print("MTU (Maximum Transmission Unit) management tool\nDo not call the class directly, instantiate it first!")
 
 
-    def getAddressMTU(self, ip) -> int:
+    def getAddressMTU(self, ip: str) -> int:
         """
         Returns MTU for a specified IP address
         Using REGEXP (P is the additional features from Perl) and iproute2
@@ -80,7 +80,7 @@ class LibIface:
         return mtu
 
 
-    def setMTU(self, mtu) -> int:
+    def setMTU(self, mtu: int) -> int:
         """
         Uses socket ioctl syscall to set the MTU
         """
@@ -97,7 +97,7 @@ class LibIface:
 
         log.debug('set_mtu: mtu of {0} = {1}'.format(self.ifname, self.mtu))
 
-        return self.mtu
+        return self.getMTU()
 
 
     def getAvailableIfaces(self, ifa = 0) -> list:

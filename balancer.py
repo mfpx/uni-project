@@ -1,7 +1,6 @@
 import socket, asyncio, logging, struct, getopt, sys
 import concurrent.futures
 from fcntl import ioctl
-from xmlrpc.client import Server
 from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
 from balancerlibs.libsys import System
@@ -32,20 +31,31 @@ class Balancer:
 
 
     # Selection algorithms: Lowest Latency (default), Round-Robin
-    def __init__(self, type, pmtu, ifname = 'eth0', timeout = 30, algorithm = "latency", name = "balancer"):
+    def __init__(self, type: str, pmtu: int, ifname = 'eth0', timeout = 30, algorithm = "latency", name = "balancer"):
         self.type = type # Primary or Backup
         self.pmtu = pmtu # Packet MTU
         self.ifname = ifname # Local interface to use
         self.timeout = timeout
         self.algorithm = algorithm # Server selection algorithm
         self.name = name # Balancer node name
+        self.static_mtu = False # Use static MTU
+        self.no_mtu = False # Do not change interface MTU at all
 
 
     def __call__(self):
-        log.debug("Not implemented") # Do not call class directly
+        log.debug("Not implemented") # Do not call class directly, used for control sockets (unimplemented)
+        # Return balancer configuration and stats to controlling clients
+
+    
+    def useStaticMTU(self, state: bool) -> None:
+        self.static_mtu = state
+
+    
+    def noMTUChange(self, state: bool) -> None:
+        self.no_mtu = state
 
 
-    def boostrap(self, cfg):
+    def boostrap(self, cfg) -> bool:
         self.cfg = cfg
         now = datetime.now()
         timedate = now.strftime("%H:%M:%S on %x")
@@ -55,14 +65,23 @@ class Balancer:
         print(f"--- Bootstrapping started at {timedate} ---")
         ifip = self.getInterfaceIP(self.getInterface())
         print(f"Interface {self.getInterface()} has IP {ifip}")
+
+        if self.static_mtu == True and self.no_mtu == True:
+            print("Do not use --staticmtu and --nomtu together")
+            sys.exit(1)
+        elif self.static_mtu == True:
+            print(f"INFO: This node will use a static MTU of {self.pmtu}")
+        elif self.no_mtu == True:
+            print(f"INFO: This node will not attempt to change {self.ifname} MTU")
+        
         print(f"- Upstream node latency test started at {timedate} -")
         for host in self.cfg["servers"]:
             host_ttl.append([host, 64])
         latencies = slib.getLatencyToMultipleHosts(host_ttl)
 
-
         
-    def setNodeConnectionTimeout(self, timeout) -> bool:
+        
+    def setNodeConnectionTimeout(self, timeout: int) -> bool:
         """
         Sets the node connection timeout in milliseconds
         This determines how long the node will wait for a response
@@ -95,30 +114,33 @@ class Balancer:
 
         if sysmtu != self.pmtu:
             log.warn("Interface MTU modified externally! Expected {} but found {}".format(self.pmtu, sysmtu))
-            log.warn("MTU will now be reset to {} on interface {}".format(self.pmtu, self.ifname))
-            lif.setMTU(self.pmtu)
 
         return sysmtu
 
 
-    def setMTU(self, mtu) -> bool:
+    def setMTU(self, mtu: int) -> bool:
         """Sets MTU (maximum transmission unit) for the current interface"""
 
-        # Set system MTU first
         lif = LibIface(self.ifname)
-        newmtu = lif.setMTU(mtu)
 
-        # Set instance MTU
-        self.pmtu = mtu
+        if self.no_mtu == False and self.static_mtu == False:
+            # Set system MTU first
+            newmtu = lif.setMTU(mtu)
+            # Set instance MTU
+            self.pmtu = newmtu
+        elif self.static_mtu == True:
+            newmtu = lif.setMTU(self.pmtu)
+        else:
+            return 2
 
         # Check and report
-        if self.pmtu == newmtu:
+        if self.pmtu == lif.getMTU():
             return True
         else:
             return False
 
 
-    def setInterface(self, interface) -> None:
+    def setInterface(self, interface: str) -> None:
         """Sets the interface to use for operation"""
         self.ifname = interface
 
@@ -128,7 +150,7 @@ class Balancer:
         return self.ifname
 
 
-    def setSelectionAlgorithm(self, algorithm) -> None:
+    def setSelectionAlgorithm(self, algorithm: str) -> None:
         self.algorithm = algorithm
 
 
@@ -144,7 +166,7 @@ class Balancer:
         return socket.gethostname()
 
 
-    def getInterfaceIP(self, interface) -> str:
+    def getInterfaceIP(self, interface: str) -> str:
         """Returns the IP address of a specific interface"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return socket.inet_ntoa(ioctl
@@ -155,7 +177,7 @@ class Balancer:
                                     bytes(interface.encode("utf-8"))))[20:24]) # Struct takes char[]
 
 
-    def setNodeName(self, name) -> None:
+    def setNodeName(self, name: str) -> None:
         """Sets the named node name for use in the network"""
         self.name = name
 
@@ -170,13 +192,13 @@ class Balancer:
 class ForwardEgress:
 
 
-    def __init__(self, destination, destport, balancer) -> None:
+    def __init__(self, destination: str, destport: int, balancer: Balancer) -> None:
         self.balancer = balancer
         self.destination = destination
         self.destport = destport
 
 
-    def __socketOptions(self, sock, idle = 1, maxretrcount = 5, interval = 3, lingersecs = 5) -> None:
+    def __socketOptions(self, sock: socket, idle = 1, maxretrcount = 5, interval = 3, lingersecs = 5) -> None:
         """Sets socket options, also configures the socket for keep-alive"""
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, idle)
@@ -234,7 +256,7 @@ class ForwardEgress:
 class ForwardIngress:
 
 
-    def __init__(self, balancer, interface = 'eth0', ip = '0.0.0.0', port = 8000):
+    def __init__(self, balancer: Balancer, interface = 'eth0', ip = '0.0.0.0', port = 8000):
         self.interface = interface
         self.bindip = ip
         self.port = port
@@ -242,6 +264,7 @@ class ForwardIngress:
 
         self.dest = 0
         self.destport = 80
+
 
     @repeat(every(5).seconds)
     def setHost(self):
@@ -271,6 +294,7 @@ class ForwardIngress:
         size = Helpers().determinePayloadSize(data)
         log.warning(f"Client payload packet size is {size} bytes")
 
+        # This will replace host address header
         # --- UGLY CODE BEGIN ---
         newdata = data.decode('utf-8').split(' ')
         newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
@@ -296,29 +320,38 @@ class ForwardIngress:
 #asyncio.run(fi.ingressServer())
 
 if __name__ == "__main__":
-    system = System()
     helpers = Helpers()
+    cfg = helpers.ConfigParser()
+
+    balancer = Balancer(
+    cfg["node_type"], # Primary or Backup
+    cfg["default_pmtu"], # Default MTU value
+    cfg["ifname"], # Interface name
+    cfg["timeout"], # Connection timeout
+    cfg["algorithm"], # Round-robin or latency
+    cfg["hostname"]) # Node name
 
     try:
         argv = sys.argv[1:]
         opts, args = getopt.getopt(argv, "hm:ni:c:", ["staticmtu=", "iface=", "conf=", "nomtu"])
         if len(opts) != 0:
-            system.cli(opts)
+            for opt, arg in opts:
+                if opt == '-h':
+                    print("balancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
+                    sys.exit(1)
+                elif opt in ("-i", "--iface"):
+                    balancer.setInterface(arg)
+                elif opt in ("-m", "--staticmtu"):
+                    balancer.setMTU(int(arg))
+                    balancer.useStaticMTU(True)
+                elif opt in ("-n", "--nomtu"):
+                    balancer.noMTUChange(True)
+                elif opt in ("-c", "--conf"):
+                    cfg = helpers.ConfigParser(arg)
     except getopt.GetoptError:
-        print("balancer.py [hmnic] --staticmtu= --iface= --conf --nomtu")
+        print("balancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
 
-    cfg = helpers.ConfigParser()
-
-    balancer = Balancer(
-        cfg["node_type"], # Primary or Backup
-        cfg["default_pmtu"], # Default MTU value
-        cfg["ifname"], # Interface name
-        cfg["timeout"], # Connection timeout
-        cfg["algorithm"], # Round-robin or latency
-        None) # Node name - nothing by default
 
     with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
         future = executor.submit(balancer.boostrap, cfg)
         print(future.result())
-
-    ##balancer.boostrap()

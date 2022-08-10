@@ -15,8 +15,11 @@ except ImportError:
 class Helpers:
 
     def ConfigParser(self, config = "config.yml") -> int | dict:
-        configfile = open(config, 'r')
-        configdict = load(configfile, Loader = Loader)
+        try:
+            configfile = open(config, 'r')
+            configdict = load(configfile, Loader = Loader)
+        except:
+            raise OSError("Unable to open the configuration file")
 
         CONFIG_CONTENTS = {
          "hostname": str,
@@ -105,7 +108,7 @@ class ServerLibrary:
             except:
                 if delay:
                     await asyncio.sleep(delay)
-        print("host is down or not responding")
+        print("Host is down or not responding")
         return False
 
 
