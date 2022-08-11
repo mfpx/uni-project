@@ -122,7 +122,7 @@ class LibIface:
 
 if __name__ == "__main__":
     import sys, os, platform
-    logging.basicConfig()
+    logging.basicConfig(filename="libnet.log", level=logging.DEBUG)
 
     if platform.system() != 'Linux':
         log.warning("Only tested on Linux, may not work on other systems!")

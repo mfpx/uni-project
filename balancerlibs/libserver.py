@@ -182,7 +182,7 @@ class ServerLibrary:
     def pickLatencyHost(self, ttl = 64):
         # First get all hosts
         config = Helpers().ConfigParser()
-        hostlist = config['servers']
+        hostlist = config["servers"]
 
         # Second, add TTL to each host
         host_ttl = []
@@ -195,12 +195,12 @@ class ServerLibrary:
         # Get only latencies
         latency = []
         for item in latencies:
-            latency.append(item['latency'])
+            latency.append(item["latency"])
 
         # Append all scores to the list
         score = []
         for item in latencies:
-            score.append(item['score'])
+            score.append(item["score"])
 
         # Get min latency and max score
         lowest_latency = min(latency)
@@ -208,10 +208,10 @@ class ServerLibrary:
 
         for item in latencies:
             if highest_score >= 9.8: # It appears that the score doesn't normally go lower than 9.8
-                if lowest_latency == item['latency']:
+                if lowest_latency == item["latency"]:
                     return item
             else:
-                if highest_score == item['score']:
+                if highest_score == item["score"]:
                     return item
 
 

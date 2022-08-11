@@ -1,0 +1,146 @@
+INFO:__main__:--- Bootstrapping started at 00:47:17 on 08/11/22 ---
+INFO:__main__:--- Bootstrapping started at 00:47:24 on 08/11/22 ---
+INFO:__main__:--- Bootstrapping started at 01:29:03 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:--- Bootstrapping started at 01:34:40 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:--- Bootstrapping started at 01:49:41 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:--- Bootstrapping started at 01:50:13 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:schedule:Running job Job(interval=5, unit=seconds, do=setHost, args=(), kwargs={})
+INFO:__main__:--- Bootstrapping started at 02:14:11 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:__main__:--- Bootstrapping started at 02:14:57 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:__main__:--- Bootstrapping started at 02:30:57 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:__main__:--- Bootstrapping started at 02:31:27 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:--- Bootstrapping started at 02:32:37 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:__main__:--- Bootstrapping started at 02:34:19 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f5d00ba1720>>, <__main__.ForwardIngress object at 0x7f5d00ba1720>), kwargs={})
+INFO:__main__:--- Bootstrapping started at 02:35:30 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7fd45bbc56f0>>,), kwargs={})
+INFO:__main__:--- Bootstrapping started at 02:36:17 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f673ff89690>>,), kwargs={})
+INFO:__main__:Determining the best host
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f673ff89690>>,), kwargs={})
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "google.co.uk" as the destination
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f673ff89690>>,), kwargs={})
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "google.co.uk" as the destination
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f673ff89690>>,), kwargs={})
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "google.co.uk" as the destination
+INFO:__main__:--- Bootstrapping started at 02:39:53 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f024d9496f0>>,), kwargs={})
+INFO:__main__:Determining the best host
+DEBUG:schedule:Running job Job(interval=10, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f024d9496f0>>,), kwargs={})
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "google.co.uk" as the destination
+INFO:__main__:--- Bootstrapping started at 02:40:35 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:schedule:Running job Job(interval=30, unit=seconds, do=run_threaded, args=(<bound method ForwardIngress.setHost of <__main__.ForwardIngress object at 0x7f890f3916f0>>,), kwargs={})
+INFO:__main__:Determining the best host
+INFO:__main__:--- Bootstrapping started at 02:41:40 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+WARNING:__main__:Client payload packet size is 0 bytes
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:302> exception=IndexError('list assignment index out of range')>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 311, in response
+    newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
+IndexError: list assignment index out of range
+WARNING:__main__:Client payload packet size is 0 bytes
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-6' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:302> exception=IndexError('list assignment index out of range')>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 311, in response
+    newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
+IndexError: list assignment index out of range
+WARNING:__main__:Client payload packet size is 435 bytes
+DEBUG:balancerlibs.libnet:get_mtu: mtu of enp4s0 = 1500
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-8' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:302> exception=TypeError("ForwardEgress.__init__() missing 1 required positional argument: 'balancer'")>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 324, in response
+    traffic = ForwardEgress(self.dest, self.destport).forwardTraffic(data, writer, True)
+TypeError: ForwardEgress.__init__() missing 1 required positional argument: 'balancer'
+INFO:__main__:--- Bootstrapping started at 02:44:36 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "google.co.uk" as the destination
+WARNING:__main__:Client payload packet size is 461 bytes
+DEBUG:balancerlibs.libnet:get_mtu: mtu of enp4s0 = 1500
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:297> exception=TypeError("ForwardEgress.__init__() missing 1 required positional argument: 'balancer'")>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 319, in response
+    traffic = ForwardEgress(self.dest, self.destport).forwardTraffic(data, writer, True)
+TypeError: ForwardEgress.__init__() missing 1 required positional argument: 'balancer'
+INFO:__main__:--- Bootstrapping started at 02:46:14 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:Determining the best host
+DEBUG:asyncio:Using selector: EpollSelector
+WARNING:__main__:Selected "google.co.uk" as the destination
+WARNING:__main__:Client payload packet size is 461 bytes
+DEBUG:balancerlibs.libnet:get_mtu: mtu of enp4s0 = 1500
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:299> exception=TypeError("ForwardEgress.__init__() missing 1 required positional argument: 'balancer'")>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 321, in response
+    traffic = ForwardEgress(self.dest, self.destport).forwardTraffic(data, writer, True)
+TypeError: ForwardEgress.__init__() missing 1 required positional argument: 'balancer'
+INFO:__main__:--- Bootstrapping started at 02:55:15 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:--- Bootstrapping started at 02:56:38 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:Determining the best host
+DEBUG:asyncio:Using selector: EpollSelector
+WARNING:__main__:Selected "127.0.0.1" as the destination
+WARNING:__main__:Client payload packet size is 435 bytes
+DEBUG:balancerlibs.libnet:get_mtu: mtu of enp4s0 = 1500
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:300> exception=TypeError("ForwardEgress.__init__() missing 1 required positional argument: 'balancer'")>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 322, in response
+    traffic = ForwardEgress(self.dest, self.destport).forwardTraffic(data, writer, True)
+TypeError: ForwardEgress.__init__() missing 1 required positional argument: 'balancer'
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+WARNING:__main__:Client payload packet size is 7 bytes
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-6' coro=<ForwardIngress.response() done, defined at /home/david/OneDrive/uni-project/balancer.py:300> exception=IndexError('list assignment index out of range')>
+Traceback (most recent call last):
+  File "/home/david/OneDrive/uni-project/balancer.py", line 309, in response
+    newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
+IndexError: list assignment index out of range
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host

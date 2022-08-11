@@ -1,6 +1,8 @@
+from re import T
 import socket, asyncio, logging, struct, getopt, sys
 import concurrent.futures
 from fcntl import ioctl
+import threading
 from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
 from balancerlibs.libsys import System
@@ -10,7 +12,7 @@ from datetime import datetime
 # HIGHLY EXPERIMENTAL - NATURALLY POC ONLY!
 
 log = logging.getLogger(__name__)
-logging.basicConfig()
+logging.basicConfig(filename="balancer.log", level=logging.DEBUG)
 
 SIOCGIFADDR = 0x8915 # FCNTL SOCKET CONFIGURATION CONTROL CODE - DO NOT MODIFY (see sockios.h)
 """
@@ -60,26 +62,32 @@ class Balancer:
         now = datetime.now()
         timedate = now.strftime("%H:%M:%S on %x")
         slib = ServerLibrary()
-        host_ttl = []
 
-        print(f"--- Bootstrapping started at {timedate} ---")
+        log.info(f"--- Bootstrapping started at {timedate} ---")
         ifip = self.getInterfaceIP(self.getInterface())
-        print(f"Interface {self.getInterface()} has IP {ifip}")
+        log.info(f"Interface {self.getInterface()} has IP {ifip}")
 
         if self.static_mtu == True and self.no_mtu == True:
-            print("Do not use --staticmtu and --nomtu together")
+            log.error("Do not use --staticmtu and --nomtu together")
             sys.exit(1)
         elif self.static_mtu == True:
-            print(f"INFO: This node will use a static MTU of {self.pmtu}")
+            log.info(f"INFO: This node will use a static MTU of {self.pmtu}")
         elif self.no_mtu == True:
-            print(f"INFO: This node will not attempt to change {self.ifname} MTU")
+            log.info(f"INFO: This node will not attempt to change {self.ifname} MTU")
         
         print(f"- Upstream node latency test started at {timedate} -")
-        for host in self.cfg["servers"]:
-            host_ttl.append([host, 64])
-        latencies = slib.getLatencyToMultipleHosts(host_ttl)
+        latencyhost = slib.pickLatencyHost()
+        print(latencyhost)
 
-        
+        fi = ForwardIngress(self, self.getInterface(), self.getInterfaceIP(self.getInterface()), 8080)
+        self.runThreaded(fi.setHost)
+        asyncio.run(fi.ingressServer())
+
+    
+    def runThreaded(self, job_func):
+        job_thread = threading.Thread(target=job_func)
+        job_thread.start()
+
         
     def setNodeConnectionTimeout(self, timeout: int) -> bool:
         """
@@ -266,18 +274,19 @@ class ForwardIngress:
         self.destport = 80
 
 
-    @repeat(every(5).seconds)
     def setHost(self):
         print("repeat got executed!")
 
         # Set host
         if self.balancer.getSelectionAlgorithm() == "latency":
-            print("Determining the best host")
+            log.info("Determining the best host")
             host = ServerLibrary().pickLatencyHost()
 
             self.dest = host['host']
-            self.destport = 80 # Add this to config
+            self.destport = 8000 # Add this to config
             log.warning(f"Selected \"{self.dest}\" as the destination")
+        time.sleep(30)
+        self.setHost()
         
 
     async def ingressServer(self):
