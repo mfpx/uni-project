@@ -5,7 +5,6 @@ from fcntl import ioctl
 import threading
 from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
-from balancerlibs.libsys import System
 from schedule import *
 from datetime import datetime
 # Load Balancer Core
@@ -50,11 +49,21 @@ class Balancer:
 
     
     def useStaticMTU(self, state: bool) -> None:
+        """Sets instance to use static MTU"""
         self.static_mtu = state
 
     
     def noMTUChange(self, state: bool) -> None:
+        """Prevents instance from changing interface MTU"""
         self.no_mtu = state
+
+    
+    def setNodeName(self, name: str) -> None:
+        self.name = name
+
+
+    def getNodeName(self) -> str:
+        return self.name
 
 
     def boostrap(self, cfg) -> bool:
@@ -66,6 +75,10 @@ class Balancer:
         log.info(f"--- Bootstrapping started at {timedate} ---")
         ifip = self.getInterfaceIP(self.getInterface())
         log.info(f"Interface {self.getInterface()} has IP {ifip}")
+
+        self.setNodeName(Helpers().generateNodeName())
+        log.info(f"Node name is set to {self.getNodeName()}")
+        print(f"Node name is set to {self.getNodeName()}")
 
         if self.static_mtu == True and self.no_mtu == True:
             log.error("Do not use --staticmtu and --nomtu together")

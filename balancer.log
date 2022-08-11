@@ -144,3 +144,14 @@ WARNING:__main__:Selected "127.0.0.1" as the destination
 INFO:__main__:Determining the best host
 WARNING:__main__:Selected "127.0.0.1" as the destination
 INFO:__main__:Determining the best host
+INFO:__main__:--- Bootstrapping started at 17:36:07 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:Node name is set to deep-wildfowl
+INFO:__main__:--- Bootstrapping started at 17:36:14 on 08/11/22 ---
+INFO:__main__:Interface enp4s0 has IP 192.168.1.100
+INFO:__main__:Node name is set to sizzling-dingo
+INFO:__main__:Determining the best host
+DEBUG:asyncio:Using selector: EpollSelector
+WARNING:__main__:Selected "127.0.0.1" as the destination
+INFO:__main__:Determining the best host
+WARNING:__main__:Selected "127.0.0.1" as the destination

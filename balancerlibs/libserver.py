@@ -24,6 +24,8 @@ class Helpers:
         CONFIG_CONTENTS = {
          "hostname": str,
          "node_type": str,
+         "bindip": str,
+         "bindport": int,
          "default_pmtu": int,
          "ifname": str,
          "timeout": int,

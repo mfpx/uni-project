@@ -119,7 +119,6 @@ class LibIface:
         return ifaces
 
 
-
 if __name__ == "__main__":
     import sys, os, platform
     logging.basicConfig(filename="libnet.log", level=logging.DEBUG)
@@ -141,7 +140,6 @@ if __name__ == "__main__":
             sys.exit("You must run this tool as root")
         else:
             print("MTU (Maximum Transmission Unit) management tool (C) David Stumbra 2022")
-
 
 
     mtu = None
