@@ -1,6 +1,6 @@
 hostname: "auto" # Node name, auto to generate one automatically
 node_type: "primary" # Node type, primary or backup
-bindip: "0.0.0.0" # IP to bind to, or lan to use the interface IP
+bindip: "127.0.0.1" # IP to bind to, or lan to use the interface IP
 bindport: 8000 # Port the balancer will bind to
 default_pmtu: 1500 # Initial MTU to set, ignored if --nomtu or --staticmtu are used
 ifname: "enp4s0" # Local interface to use

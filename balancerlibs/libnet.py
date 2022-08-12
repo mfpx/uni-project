@@ -134,12 +134,12 @@ if __name__ == "__main__":
             # NOTE: You MAY or MAY NOT need to setcap on the python executable to inherit user perms
             sys.exit("You must run this tool as root, or have the CAP_NET_ADMIN privilege (see capabilities.7 manpage), exiting")
         else:
-            print("MTU (Maximum Transmission Unit) management tool (C) David Stumbra 2022")
+            print("MTU (Maximum Transmission Unit) management tool")
     else:
         if os.geteuid() != 0:
             sys.exit("You must run this tool as root")
         else:
-            print("MTU (Maximum Transmission Unit) management tool (C) David Stumbra 2022")
+            print("MTU (Maximum Transmission Unit) management tool")
 
 
     mtu = None

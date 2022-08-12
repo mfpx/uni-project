@@ -1,4 +1,3 @@
-from re import T
 import socket, asyncio, logging, struct, getopt, sys
 import concurrent.futures
 from fcntl import ioctl
@@ -71,11 +70,9 @@ class Balancer:
 
     def bootstrap(self, cfg) -> bool:
         self.cfg = cfg
-        now = datetime.now()
-        timedate = now.strftime("%H:%M:%S on %x")
         slib = ServerLibrary(log)
 
-        log.info(f"--- Bootstrapping started at {timedate} ---")
+        log.info(f"--- Bootstrapping started at {datetime.now().strftime('%H:%M:%S on %x')} ---")
         if cfg["bindip"] == "lan":
             ifip = self.getInterfaceIP(self.getInterface())
             log.info(f"Interface {self.getInterface()} has IP {ifip}")
@@ -97,21 +94,25 @@ class Balancer:
         elif self.no_mtu == True:
             log.info(f"INFO: This node will not attempt to change {self.ifname} MTU")
         
-        print(f"- Upstream node latency test started at {timedate} -")
+        print(f"- Upstream node latency test started at {datetime.now().strftime('%H:%M:%S on %x')} -")
         latencyhost = slib.pickLatencyHost()
-        print(latencyhost)
 
         fi = ForwardIngress(self,
          self.getInterface(), 
          ifip,
          cfg["bindport"])
         
+        host, port = latencyhost["host"].split(':')
+        fi.setInitHost(host, port)
+
+        log.info(f"--- Bootstrapping finished at {datetime.now().strftime('%H:%M:%S on %x')} ---")
         self.runThreaded(fi.setHost)
         asyncio.run(fi.ingressServer())
 
     
     def runThreaded(self, job_func):
-        job_thread = threading.Thread(target=job_func)
+        """Runs a function in a new thread"""
+        job_thread = threading.Thread(target = job_func)
         job_thread.start()
 
         
@@ -264,7 +265,7 @@ class ForwardEgress:
                 data = ingestServer.recv(2048)
 
             size = Helpers().determinePayloadSize(data)
-            log.warning(f"Server reply payload packet size is {size} bytes")
+            log.debug(f"Server reply payload packet size is {size} bytes")
 
             writer.write(data)
             # await writer.drain() # Suspend until buffer is fully flushed
@@ -295,9 +296,16 @@ class ForwardIngress:
         self.bindip = ip
         self.port = port
         self.balancer = balancer
+        self.initParamsSet = False
 
-        #self.dest = 0
-        #self.destport = 80
+
+    def setInitHost(self, host: str, port: int) -> bool | None:
+        if self.initParamsSet == False:
+            self.dest = host
+            self.port = port
+            self.initParamsSet = True
+        else:
+            return False
 
 
     def setHost(self):
@@ -328,7 +336,7 @@ class ForwardIngress:
         data = await reader.read(2048)
 
         size = Helpers().determinePayloadSize(data)
-        log.warning(f"Client payload packet size is {size} bytes")
+        log.debug(f"Client payload packet size is {size} bytes")
 
         # This will replace host address header
         # --- UGLY CODE BEGIN ---
@@ -384,9 +392,10 @@ if __name__ == "__main__":
                     balancer.noMTUChange(True)
                 elif opt in ("-c", "--conf"):
                     cfg = helpers.ConfigParser(arg)
+                else:
+                    print(f"Unknown argument {arg}")
     except getopt.GetoptError:
         print("balancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
-
 
     with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
         future = executor.submit(balancer.bootstrap, cfg)
