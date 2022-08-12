@@ -182,11 +182,32 @@ class ServerLibrary:
             items["latency"] = round(avglatency, 4)
             items["host"] = host
             sleep(interval)
+        self.log.debug(f"Average latency was {items['latency']}")
 
         return items
 
+    
+    def pickRoundRobinHost(self, lastHost: str) -> str:
+        # Get all hosts
+        config = Helpers().ConfigParser()
+        hostlist = config["servers"]
 
-    def pickLatencyHost(self, ttl = 64):
+        hosts = {}
+        # Assign an index to each host
+        for idx, host in enumerate(hostlist):
+            hosts[idx] = host
+
+        # Find the index of the host - this is expensive
+        lastHostIndex = list(hosts.keys())[list(hosts.values()).index(lastHost)]
+
+        # Does the next index value make sense?
+        if lastHostIndex + 1 >= len(hosts):
+            return hosts[0] # If not, start from 0
+        else:
+            return hosts[lastHostIndex + 1] # If it does, return the value
+
+
+    def pickLatencyHost(self, ttl = 64) -> dict:
         # First get all hosts
         config = Helpers().ConfigParser()
         hostlist = config["servers"]

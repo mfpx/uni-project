@@ -94,22 +94,30 @@ class Balancer:
         elif self.no_mtu == True:
             log.info(f"INFO: This node will not attempt to change {self.ifname} MTU")
         
-        print(f"- Upstream node latency test started at {datetime.now().strftime('%H:%M:%S on %x')} -")
-        latencyhost = slib.pickLatencyHost()
+        if self.getSelectionAlgorithm() == "latency":
+            log.info(f"- Upstream node latency test started at {datetime.now().strftime('%H:%M:%S on %x')} -")
+            latencyhost = slib.pickLatencyHost()
+            host, port = latencyhost["host"].split(':')
+            log.info(f"- Upstream node latency test ended at {datetime.now().strftime('%H:%M:%S on %x')} -")
+        elif self.getSelectionAlgorithm() == "roundrobin":
+            host, port = cfg["servers"][0].split(':')
+            log.info(f"First host will be {host}:{port}")
 
-        fi = ForwardIngress(self,
-         self.getInterface(), 
+
+        fi = ForwardIngress(
+         self,
+         self.getInterface(),
          ifip,
          cfg["bindport"])
         
-        host, port = latencyhost["host"].split(':')
         fi.setInitHost(host, port)
 
         log.info(f"--- Bootstrapping finished at {datetime.now().strftime('%H:%M:%S on %x')} ---")
         self.runThreaded(fi.setHost)
+
         asyncio.run(fi.ingressServer())
 
-    
+
     def runThreaded(self, job_func):
         """Runs a function in a new thread"""
         job_thread = threading.Thread(target = job_func)
@@ -249,7 +257,7 @@ class ForwardEgress:
         ingestServer.settimeout(self.balancer.getNodeConnectionTimeout())
         ingestServer.setblocking(True)
 
-        # Socket options - Tested on kernel version 5.15.49
+        # Socket options - Tested on kernel version 5.15.49 and 5.18.0
         self.__socketOptions(ingestServer, 1, 5, 3, 5)
 
         # Attempt to initiate connection and forward traffic, then return response to client
@@ -302,7 +310,7 @@ class ForwardIngress:
     def setInitHost(self, host: str, port: int) -> bool | None:
         if self.initParamsSet == False:
             self.dest = host
-            self.port = port
+            self.destport = port
             self.initParamsSet = True
         else:
             return False
@@ -320,7 +328,20 @@ class ForwardIngress:
 
             self.dest = hostip
             self.destport = int(hostport)
+
             log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
+        elif self.balancer.getSelectionAlgorithm() == "roundrobin":
+            lastHost = self.dest + ':' + str(self.destport)
+            host = ServerLibrary(log).pickRoundRobinHost(lastHost)
+
+            hostip, hostport = host.split(':')
+            print(hostip, hostport)
+
+            self.dest = hostip
+            self.destport = int(hostport)
+
+            log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
+
         self.setHost()
         
 
@@ -340,24 +361,27 @@ class ForwardIngress:
 
         # This will replace host address header
         # --- UGLY CODE BEGIN ---
-        newdata = data.decode('utf-8').split(' ')
-        newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
+        try:
+            newdata = data.decode('utf-8').split(' ')
+            newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
 
-        bytestring = ''
-        for item in newdata:
-            bytestring += item + ' '
+            bytestring = ''
+            for item in newdata:
+                bytestring += item + ' '
 
-        data = bytestring.encode()
+            data = bytestring.encode()
         # --- UGLY CODE END ---
 
-        if size > self.balancer.getMTU():
-            log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
-            self.balancer.setMTU(size)
+            if size > self.balancer.getMTU():
+                log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
+                self.balancer.setMTU(size)
 
-        traffic = ForwardEgress(self.dest, self.destport, self.balancer).forwardTraffic(data, writer, True)
+            traffic = ForwardEgress(self.dest, self.destport, self.balancer).forwardTraffic(data, writer, True)
 
-        if traffic != None:
-            log.error("The request failed!")
+            if traffic != None:
+                log.error("The request failed!")
+        except:
+            log.warning("Non-HTTP request received! Ignoring.")
 
 #run_pending()
 #fi = ForwardIngress()
@@ -392,11 +416,9 @@ if __name__ == "__main__":
                     balancer.noMTUChange(True)
                 elif opt in ("-c", "--conf"):
                     cfg = helpers.ConfigParser(arg)
-                else:
-                    print(f"Unknown argument {arg}")
     except getopt.GetoptError:
-        print("balancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
+        print("Unknown argument\nbalancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
+        sys.exit(1)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
         future = executor.submit(balancer.bootstrap, cfg)
-        print(future.result())
