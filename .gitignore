@@ -3,3 +3,4 @@
 .pytest*
 .vscode
 **/*.log
+ideas.txt

@@ -29,6 +29,7 @@ Source: netdevice.7 manpage
 
 
 class Balancer:
+    """Main balancer class"""
 
 
     # Selection algorithms: Lowest Latency (default), Round-Robin
@@ -59,24 +60,32 @@ class Balancer:
 
     
     def setNodeName(self, name: str) -> None:
+        """Sets node name in multinode setups"""
         self.name = name
 
 
     def getNodeName(self) -> str:
+        """Gets node name for multinode setups"""
         return self.name
 
 
-    def boostrap(self, cfg) -> bool:
+    def bootstrap(self, cfg) -> bool:
         self.cfg = cfg
         now = datetime.now()
         timedate = now.strftime("%H:%M:%S on %x")
-        slib = ServerLibrary()
+        slib = ServerLibrary(log)
 
         log.info(f"--- Bootstrapping started at {timedate} ---")
-        ifip = self.getInterfaceIP(self.getInterface())
-        log.info(f"Interface {self.getInterface()} has IP {ifip}")
+        if cfg["bindip"] == "lan":
+            ifip = self.getInterfaceIP(self.getInterface())
+            log.info(f"Interface {self.getInterface()} has IP {ifip}")
+        else:
+            ifip = cfg["bindip"]
+            log.info(f"Configured IP is {ifip}")
 
-        self.setNodeName(Helpers().generateNodeName())
+        if self.getNodeName() == "auto" or self.getNodeName() == "":
+            self.setNodeName(Helpers().generateNodeName())
+
         log.info(f"Node name is set to {self.getNodeName()}")
         print(f"Node name is set to {self.getNodeName()}")
 
@@ -92,7 +101,11 @@ class Balancer:
         latencyhost = slib.pickLatencyHost()
         print(latencyhost)
 
-        fi = ForwardIngress(self, self.getInterface(), self.getInterfaceIP(self.getInterface()), 8080)
+        fi = ForwardIngress(self,
+         self.getInterface(), 
+         ifip,
+         cfg["bindport"])
+        
         self.runThreaded(fi.setHost)
         asyncio.run(fi.ingressServer())
 
@@ -263,7 +276,7 @@ class ForwardEgress:
 
 
     async def checkNodeState(self) -> list | bool:
-        slib = ServerLibrary()
+        slib = ServerLibrary(log)
         result = await slib.PingHost(self.destination, self.destport)
 
         if result == True:
@@ -283,22 +296,23 @@ class ForwardIngress:
         self.port = port
         self.balancer = balancer
 
-        self.dest = 0
-        self.destport = 80
+        #self.dest = 0
+        #self.destport = 80
 
 
     def setHost(self):
-        print("repeat got executed!")
+        time.sleep(30) # Maybe use the schedule lib?
 
         # Set host
         if self.balancer.getSelectionAlgorithm() == "latency":
             log.info("Determining the best host")
-            host = ServerLibrary().pickLatencyHost()
+            host = ServerLibrary(log).pickLatencyHost()
 
-            self.dest = host['host']
-            self.destport = 8000 # Add this to config
-            log.warning(f"Selected \"{self.dest}\" as the destination")
-        time.sleep(30)
+            hostip, hostport = host["host"].split(':')
+
+            self.dest = hostip
+            self.destport = int(hostport)
+            log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
         self.setHost()
         
 
@@ -332,7 +346,7 @@ class ForwardIngress:
             log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
             self.balancer.setMTU(size)
 
-        traffic = ForwardEgress(self.dest, self.destport).forwardTraffic(data, writer, True)
+        traffic = ForwardEgress(self.dest, self.destport, self.balancer).forwardTraffic(data, writer, True)
 
         if traffic != None:
             log.error("The request failed!")
@@ -375,5 +389,5 @@ if __name__ == "__main__":
 
 
     with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
-        future = executor.submit(balancer.boostrap, cfg)
+        future = executor.submit(balancer.bootstrap, cfg)
         print(future.result())

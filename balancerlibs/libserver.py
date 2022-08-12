@@ -41,10 +41,11 @@ class Helpers:
                 return -1
 
         for ipaddr in configdict['servers']:
+            ip, port = ipaddr.split(':')
             try:
-                ipaddress.ip_address(ipaddr)
+                ipaddress.ip_address(ip)
             except ValueError:
-                print(f"\"{ipaddr}\" is not an IP, it will be parsed as a DNS name!")
+                print(f"\"{ip}\" is not an IP, it will be parsed as a DNS name!")
 
         return configdict
 
@@ -80,6 +81,9 @@ class Helpers:
 
 class ServerLibrary:
 
+    def __init__(self, log) -> None:
+        self.log = log
+
 
     async def PingHost(self, host, port, duration = 10, delay = 2) -> bool:
         """Repeatedly try if a port on a host is open until duration seconds passed
@@ -105,7 +109,7 @@ class ServerLibrary:
                 _reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=5)
                 writer.close()
                 await writer.wait_closed()
-                print("host is up and the port is accessible")
+                print("Host is up and the port is accessible")
                 return True
             except:
                 if delay:
@@ -134,7 +138,8 @@ class ServerLibrary:
             raise TypeError(f"Function expected a list, but got {type(hosts)}")
         else:
             for host_array in hosts:
-                item = self.getLatencyToHost(host_array[0], host_array[1], interval, threshold, repetitions)
+                item = self.getLatencyToHost(host_array[0][0], host_array[1], interval, threshold, repetitions)
+                item["host"] = host_array[0][0] + ":" + host_array[0][1]
                 results.append(item)
 
         return results
@@ -152,14 +157,14 @@ class ServerLibrary:
         header = f"Pinging {host} every {interval} secs; threshold: {threshold} secs."
         print(header)
 
-        while count < repetitions: # Attempt 5 times
+        while count < repetitions: # Attempt n times
             count += 1
             latency = ping(host, ttl = ttl)
 
             if latency != None:
                 avglatency = (avglatency + latency) / repetitions
             else:
-                print("Request timed out", flush=True)
+                self.log.warning("Request timed out")
                 break
 
             if latency is None:
@@ -168,13 +173,13 @@ class ServerLibrary:
                 latency_text = f"{round(latency, 4)} secs"
 
             line = f"{datetime.datetime.now()}: Sent ICMP packet to {host}; latency is {latency_text}"
-            print(f"{line}")
+            self.log.debug(line)
             if latency > threshold:
                 score = self.__calculateNewScore(avglatency, items["score"])
                 items["score"] = score
-                print(f"latency is high, selection score is now {score}")
+                self.log.info(f"Latency is high, selection score is now {score}")
                 
-            items["latency"] = avglatency
+            items["latency"] = round(avglatency, 4)
             items["host"] = host
             sleep(interval)
 
@@ -189,7 +194,8 @@ class ServerLibrary:
         # Second, add TTL to each host
         host_ttl = []
         for host in hostlist:
-            host_ttl.append([host, ttl])
+            ip, port = host.split(':')
+            host_ttl.append([[ip, port], ttl])
 
         # Great, now we need to test their latency
         latencies = self.getLatencyToMultipleHosts(host_ttl)
@@ -215,15 +221,3 @@ class ServerLibrary:
             else:
                 if highest_score == item["score"]:
                     return item
-
-
-# --- DEBUG CODE --- DO NOT USE IN PRODUCTION ---
-
-#slib = ServerLibrary()
-#print(slib.getLatencyToMultipleHosts([["google.com", 64], ["qmul.ac.uk", 64], ["stumbra.co.uk", 64]], 0.5))
-
-#hel = Helpers()
-#print(hel.generateNodeName())
-#hel.ConfigParser()
-#slib = ServerLibrary()
-#slib.pickLatencyHost()
