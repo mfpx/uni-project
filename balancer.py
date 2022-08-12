@@ -93,6 +93,9 @@ class Balancer:
             log.info(f"INFO: This node will use a static MTU of {self.pmtu}")
         elif self.no_mtu == True:
             log.info(f"INFO: This node will not attempt to change {self.ifname} MTU")
+        else:
+            self.setMTU(self.pmtu)
+            log.info(f"MTU of {self.getInterface()} set to {self.pmtu}")
         
         if self.getSelectionAlgorithm() == "latency":
             log.info(f"- Upstream node latency test started at {datetime.now().strftime('%H:%M:%S on %x')} -")
@@ -156,7 +159,7 @@ class Balancer:
         sysmtu = lif.getMTU()
 
         if sysmtu != self.pmtu:
-            log.warn("Interface MTU modified externally! Expected {} but found {}".format(self.pmtu, sysmtu))
+            log.warning("Interface MTU modified externally! Expected {} but found {}".format(self.pmtu, sysmtu))
 
         return sysmtu
 
@@ -255,25 +258,32 @@ class ForwardEgress:
 
         ingestServer = socket.socket(family = socket.AF_INET, type = socket.SOCK_STREAM, proto = 0)
         ingestServer.settimeout(self.balancer.getNodeConnectionTimeout())
-        ingestServer.setblocking(True)
+        ingestServer.setblocking(True) # Non-blocking raises EINPROGRESS (see errno.h)
 
         # Socket options - Tested on kernel version 5.15.49 and 5.18.0
         self.__socketOptions(ingestServer, 1, 5, 3, 5)
 
         # Attempt to initiate connection and forward traffic, then return response to client
-        print("DESTINATION", self.destination)
-        print("PORT", self.destport)
         try:
             ingestServer.connect((self.destination, self.destport))
             if wait != False:
                 state = ingestServer.sendall(data, socket.MSG_WAITALL)
-                data = ingestServer.recv(2048, socket.MSG_WAITALL)
+                data = b''
+                while True:
+                    datastream = ingestServer.recv(2048, socket.MSG_WAITALL)
+                    if len(datastream) <= 0:
+                        break
+                    data += datastream
             else:
                 state = ingestServer.sendall(data)
                 data = ingestServer.recv(2048)
 
             size = Helpers().determinePayloadSize(data)
             log.debug(f"Server reply payload packet size is {size} bytes")
+
+            if size > self.balancer.getMTU():
+                log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
+                self.balancer.setMTU(size)
 
             writer.write(data)
             # await writer.drain() # Suspend until buffer is fully flushed
@@ -310,7 +320,7 @@ class ForwardIngress:
     def setInitHost(self, host: str, port: int) -> bool | None:
         if self.initParamsSet == False:
             self.dest = host
-            self.destport = port
+            self.destport = int(port)
             self.initParamsSet = True
         else:
             return False
@@ -335,7 +345,6 @@ class ForwardIngress:
             host = ServerLibrary(log).pickRoundRobinHost(lastHost)
 
             hostip, hostport = host.split(':')
-            print(hostip, hostport)
 
             self.dest = hostip
             self.destport = int(hostport)
@@ -354,6 +363,15 @@ class ForwardIngress:
 
     
     async def response(self, reader, writer): # NOTE: writer will write data back to client in this instance
+        """        data = b''
+                while True:
+                    datastream = await reader.read(2048)
+                    print("DATA LENGTH IS", len(datastream))
+                    if len(datastream) <= 0:
+                        print("LENGTH IS 0 NOW")
+                        break
+                    data += datastream"""
+
         data = await reader.read(2048)
 
         size = Helpers().determinePayloadSize(data)
@@ -362,14 +380,12 @@ class ForwardIngress:
         # This will replace host address header
         # --- UGLY CODE BEGIN ---
         try:
-            newdata = data.decode('utf-8').split(' ')
-            newdata[3] = f'{self.dest}:{self.destport}\r\n' # Look for an alt solution - hardcoding is bad
+            # This will match the host and port
+            hostRegex = "Host: (?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])"
+            bytestring = re.sub(hostRegex, f'Host: {self.dest}:{self.destport}', data.decode('utf-8'), count = 1)
+            #print(bytestring)
 
-            bytestring = ''
-            for item in newdata:
-                bytestring += item + ' '
-
-            data = bytestring.encode()
+            data = bytes(bytestring.encode('utf-8'))
         # --- UGLY CODE END ---
 
             if size > self.balancer.getMTU():
@@ -382,6 +398,7 @@ class ForwardIngress:
                 log.error("The request failed!")
         except:
             log.warning("Non-HTTP request received! Ignoring.")
+            raise
 
 #run_pending()
 #fi = ForwardIngress()
