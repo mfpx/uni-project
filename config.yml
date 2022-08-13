@@ -5,6 +5,7 @@ bindport: 8000 # Port the balancer will bind to
 default_pmtu: 1500 # Initial MTU to set, ignored if --nomtu or --staticmtu are used
 ifname: "enp4s0" # Local interface to use
 timeout: 30 # Connection/liveness timeout
+repoll_time: 30 # How long the server will wait between latency tests etc
 algorithm: "latency" # Server selection algorithm, latency or roundrobin
 servers: # Servers to be used in host:port format
         - "192.168.1.111:80"

@@ -1,7 +1,8 @@
 import random
+import sys
 import time, os, asyncio, datetime, numpy, concurrent.futures, gc, ipaddress
 from time import sleep
-from ping3 import ping
+from ping3 import ping, EXCEPTIONS
 from yaml import load, dump
 
 # https://pyyaml.org/wiki/PyYAMLDocumentation
@@ -29,6 +30,7 @@ class Helpers:
          "default_pmtu": int,
          "ifname": str,
          "timeout": int,
+         "repoll_time": int,
          "algorithm": str,
          "servers": list}
 
@@ -77,6 +79,14 @@ class Helpers:
             return len(payload)
         else:
             return -1
+
+
+    def shutdown(self, loop):
+        loop.stop()
+        if loop.is_closed():
+            return True
+        else:
+            return False
             
 
 class ServerLibrary:
@@ -122,7 +132,6 @@ class ServerLibrary:
     def __calculateNewScore(self, avglatency, score) -> float:
         if avglatency > 0.2:
             pts = avglatency / 10 # This should result in a low value
-            print(f"pts is {pts}")
             if pts >= 1.0:
                 return round(score - pts, 6)
             else:
@@ -159,7 +168,11 @@ class ServerLibrary:
 
         while count < repetitions: # Attempt n times
             count += 1
-            latency = ping(host, ttl = ttl)
+            try:
+                latency = ping(host, ttl = ttl)
+            except PermissionError:
+                print("Critical: ICMP-flagged sockets cannot be created by unprivileged users in your system")
+                sys.exit(1)
 
             if latency != None:
                 avglatency = (avglatency + latency) / repetitions

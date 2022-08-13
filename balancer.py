@@ -26,7 +26,6 @@ to zero via SIOCSIFADDR.
 Source: netdevice.7 manpage
 """
 
-
 class Balancer:
     """Main balancer class"""
 
@@ -68,7 +67,12 @@ class Balancer:
         return self.name
 
 
-    def bootstrap(self, cfg) -> bool:
+    async def shutdown(self, loop):
+        loop.close()
+        await loop.wait_closed()
+
+
+    def bootstrap(self, cfg):
         self.cfg = cfg
         slib = ServerLibrary(log)
 
@@ -90,9 +94,9 @@ class Balancer:
             log.error("Do not use --staticmtu and --nomtu together")
             sys.exit(1)
         elif self.static_mtu == True:
-            log.info(f"INFO: This node will use a static MTU of {self.pmtu}")
+            log.info(f"This node will use a static MTU of {self.pmtu}")
         elif self.no_mtu == True:
-            log.info(f"INFO: This node will not attempt to change {self.ifname} MTU")
+            log.info(f"This node will not attempt to change {self.ifname} MTU")
         else:
             self.setMTU(self.pmtu)
             log.info(f"MTU of {self.getInterface()} set to {self.pmtu}")
@@ -106,24 +110,24 @@ class Balancer:
             host, port = cfg["servers"][0].split(':')
             log.info(f"First host will be {host}:{port}")
 
-
         fi = ForwardIngress(
-         self,
-         self.getInterface(),
-         ifip,
-         cfg["bindport"])
+            self,
+            self.getInterface(),
+            ifip,
+            cfg["bindport"])
         
         fi.setInitHost(host, port)
 
         log.info(f"--- Bootstrapping finished at {datetime.now().strftime('%H:%M:%S on %x')} ---")
-        self.runThreaded(fi.setHost)
+        #self.runThreaded(fi.setHost)
 
-        asyncio.run(fi.ingressServer())
+        return fi
+        # Ideally exit with 0 here, but GIL exists
 
 
-    def runThreaded(self, job_func):
+    def runThreaded(self, job_func, args):
         """Runs a function in a new thread"""
-        job_thread = threading.Thread(target = job_func)
+        job_thread = threading.Thread(target = job_func, args = (args,))
         job_thread.start()
 
         
@@ -269,7 +273,7 @@ class ForwardEgress:
             if wait != False:
                 state = ingestServer.sendall(data, socket.MSG_WAITALL)
                 data = b''
-                while True:
+                while True: # Read the entire socket buffer
                     datastream = ingestServer.recv(2048, socket.MSG_WAITALL)
                     if len(datastream) <= 0:
                         break
@@ -315,9 +319,11 @@ class ForwardIngress:
         self.port = port
         self.balancer = balancer
         self.initParamsSet = False
+        self.exit_request = False
 
 
     def setInitHost(self, host: str, port: int) -> bool | None:
+        """Sets initial params for the server to function - single use function"""
         if self.initParamsSet == False:
             self.dest = host
             self.destport = int(port)
@@ -326,8 +332,12 @@ class ForwardIngress:
             return False
 
 
-    def setHost(self):
-        time.sleep(30) # Maybe use the schedule lib?
+    def setHost(self, repoll):
+        time.sleep(30) # asyncio?
+
+        if self.exit_request == True:
+            return
+
 
         # Set host
         if self.balancer.getSelectionAlgorithm() == "latency":
@@ -351,42 +361,44 @@ class ForwardIngress:
 
             log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
 
-        self.setHost()
+        self.setHost(repoll)
+
+
+    def get_loop(self):
+        return self.loop
+
+
+    def set_thread_exit(self):
+        self.exit_request = True
+
+    
+    def __set_loop(self, loop):
+        self.loop = loop
         
 
     async def ingressServer(self):
         flags = [socket.SOL_SOCKET, socket.SO_REUSEADDR]
         server = await asyncio.start_server(self.response, self.bindip, self.port, family = socket.AF_INET, flags = flags)
 
+        self.__set_loop(server.get_loop())
+
         async with server:
             await server.serve_forever()
 
     
     async def response(self, reader, writer): # NOTE: writer will write data back to client in this instance
-        """        data = b''
-                while True:
-                    datastream = await reader.read(2048)
-                    print("DATA LENGTH IS", len(datastream))
-                    if len(datastream) <= 0:
-                        print("LENGTH IS 0 NOW")
-                        break
-                    data += datastream"""
-
         data = await reader.read(2048)
 
         size = Helpers().determinePayloadSize(data)
         log.debug(f"Client payload packet size is {size} bytes")
 
-        # This will replace host address header
-        # --- UGLY CODE BEGIN ---
+        # This will replace the host address header
         try:
             # This will match the host and port
             hostRegex = "Host: (?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])"
             bytestring = re.sub(hostRegex, f'Host: {self.dest}:{self.destport}', data.decode('utf-8'), count = 1)
-            #print(bytestring)
 
             data = bytes(bytestring.encode('utf-8'))
-        # --- UGLY CODE END ---
 
             if size > self.balancer.getMTU():
                 log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
@@ -400,9 +412,6 @@ class ForwardIngress:
             log.warning("Non-HTTP request received! Ignoring.")
             raise
 
-#run_pending()
-#fi = ForwardIngress()
-#asyncio.run(fi.ingressServer())
 
 if __name__ == "__main__":
     helpers = Helpers()
@@ -437,5 +446,16 @@ if __name__ == "__main__":
         print("Unknown argument\nbalancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
         sys.exit(1)
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
-        future = executor.submit(balancer.bootstrap, cfg)
+    try:
+        with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
+            future = executor.submit(balancer.bootstrap, cfg)
+            fi = future.result()
+            hostloop = balancer.runThreaded(fi.setHost, cfg["repoll_time"])
+            asyncio.run(fi.ingressServer())
+    except KeyboardInterrupt:
+        fi.set_thread_exit()
+        log.debug("Waiting for threads to exit")
+        time.sleep(cfg["repoll_time"])
+        Helpers().shutdown(fi.get_loop())
+        future.cancel()
+        log.info("Shutdown complete")

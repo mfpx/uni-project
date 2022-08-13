@@ -18,8 +18,8 @@ crashes.
 
 Source: netdevice.7 manpage
 """
-SIOCGIFMTU = 0x8921
-SIOCSIFMTU = 0x8922
+SIOCGIFMTU = 0x8921 # DO NOT CHANGE
+SIOCSIFMTU = 0x8922 # DO NOT CHANGE
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class LibIface:
             log.critical('socket ioctl call failed: {0}'.format(s))
             raise
 
-        log.debug('get_mtu: mtu of {0} = {1}'.format(self.ifname, mtu))
+        log.debug('getMTU: mtu of {0} = {1}'.format(self.ifname, mtu))
         self.mtu = mtu
         return mtu
 
@@ -92,10 +92,10 @@ class LibIface:
             # Little endian and a 2 byte unsigned short
             self.mtu = struct.unpack('<H',ifs[16:18])[0]
         except Exception as s:
-            log.critical('socket ioctl call failed: {0}'.format(s))
+            log.critical('Socket ioctl call failed: {0}'.format(s))
             raise
 
-        log.debug('set_mtu: mtu of {0} = {1}'.format(self.ifname, self.mtu))
+        log.debug('setMTU: mtu of {0} = {1}'.format(self.ifname, self.mtu))
 
         return self.getMTU()
 
@@ -108,7 +108,7 @@ class LibIface:
         ifaces = [] # Hard ref to prevent untimely garbage collection
 
         for a, b in psutil.net_if_addrs().items():
-            log.debug("interface {} has address {}".format(a,b[0].address))
+            log.debug("Interface {} has address {}".format(a,b[0].address))
             ifaces.append([a, b])
 
         if ifa != 0:
