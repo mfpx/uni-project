@@ -1,4 +1,4 @@
-import socket, asyncio, logging, struct, getopt, sys
+import socket, asyncio, logging, struct, getopt, sys, deprecation
 import concurrent.futures
 from fcntl import ioctl
 import threading
@@ -259,7 +259,7 @@ class ForwardEgress:
 
     # This will block but that's okay
     def forwardTraffic(self, data, writer, wait) -> bool:
-
+        """Forwards the incoming traffic to a configured host"""
         ingestServer = socket.socket(family = socket.AF_INET, type = socket.SOCK_STREAM, proto = 0)
         ingestServer.settimeout(self.balancer.getNodeConnectionTimeout())
         ingestServer.setblocking(True) # Non-blocking raises EINPROGRESS (see errno.h)
@@ -298,6 +298,7 @@ class ForwardEgress:
             raise # Reraise last exception
 
 
+    @deprecation.deprecated(details = "Do not use")
     async def checkNodeState(self) -> list | bool:
         slib = ServerLibrary(log)
         result = await slib.PingHost(self.destination, self.destport)

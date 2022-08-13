@@ -14,6 +14,7 @@ except ImportError:
 #gc.set_debug(gc.DEBUG_LEAK)
 
 class Helpers:
+    """Balancer system helper functions"""
 
     def ConfigParser(self, config = "config.yml") -> int | dict:
         try:
@@ -81,7 +82,8 @@ class Helpers:
             return -1
 
 
-    def shutdown(self, loop):
+    def shutdown(self, loop: asyncio.BaseEventLoop) -> bool:
+        """Stops the EventLoop and waits for it to close"""
         loop.stop()
         if loop.is_closed():
             return True

@@ -15,7 +15,7 @@ class CryptoLib:
 
     # pad with spaces at the end of the text
     # beacuse AES needs 16 byte blocks
-    def __pad(s) -> str:
+    def __pad(self, s) -> str:
         block_size = 16
         remainder = len(s) % block_size
         padding_needed = block_size - remainder
@@ -23,7 +23,7 @@ class CryptoLib:
 
 
     # literal opposite of pad()
-    def __unpad(s) -> str:
+    def __unpad(self, s) -> str:
         return s.rstrip()
 
 
@@ -82,7 +82,7 @@ class CryptoLib:
         return decrypted
 
 
-    def encrypt_json(self, json) -> str:
+    def encrypt_json(self, json) -> dict:
         if self.__validate_json(json) == 0:
             return self.__encrypt(json)
         else:
