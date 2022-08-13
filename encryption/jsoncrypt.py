@@ -66,7 +66,7 @@ class CryptoLib:
 
         """
         generate the private key from the password and salt
-        per RFC7914 (https://datatracker.ietf.org/doc/html/rfc7914.html#section-12)
+        per RFC7914 (https://datatracker.ietf.org/doc/html/rfc7914.html#section-6)
         N is the processing cost factor
         R is block size
         P is parallelisation param
