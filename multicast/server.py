@@ -7,7 +7,7 @@ sys.path.insert(0, parentdir)
 
 from encryption.jsoncrypt import CryptoLib
 
-class Advertise:
+class MulticastTx:
     def __init__(self, name: str, node_type: str, mcast_group: tuple) -> None:
         self.name = name
         self.node_type = node_type
@@ -67,7 +67,7 @@ class Advertise:
 
 
 # https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml
-adv = Advertise("node", "primary", ("224.3.29.71", 10000))
+adv = MulticastTx("node", "primary", ("224.3.29.71", 10000))
 sock = adv.create_socket()
 msg = adv.create_message({"hello": "world"}, "password")
 
