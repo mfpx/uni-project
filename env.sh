@@ -1,9 +1,9 @@
 #!/bin/bash
 # shellcheck disable=SC1091
 
-USE_SONAR=true
-CHECK_ONLY=true
-SONAR_KEY="sqp_54550d50541e1915f3a579d42fcd3014cca1c233"
+USE_SONAR=false
+CHECK_ONLY=false
+SONAR_KEY=""
 SONAR_URI="http://localhost:9000"
 
 if [ $CHECK_ONLY == false ]
@@ -18,8 +18,6 @@ then
 else
     echo "SonarQube-only!"
 fi
-
-
 
 if [ $USE_SONAR == true ]
 then

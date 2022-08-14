@@ -71,7 +71,7 @@ class LibIface:
         try:
             ifs = ioctl(sock, SIOCGIFMTU, ifr)
             mtu = struct.unpack('<H',ifs[16:18])[0]
-        except Exception:
+        except Exception as s:
             log.critical('Socket ioctl call failed: {0}'.format(s))
             raise
 
