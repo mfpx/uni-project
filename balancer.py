@@ -51,47 +51,47 @@ class Balancer:
         # Return balancer configuration and stats to controlling clients
 
     
-    def useStaticMTU(self, state: bool) -> None:
+    def use_static_mtu(self, state: bool) -> None:
         """Sets instance to use static MTU"""
         self.static_mtu = state
 
     
-    def noMTUChange(self, state: bool) -> None:
+    def no_mtu_change(self, state: bool) -> None:
         """Prevents instance from changing interface MTU"""
         self.no_mtu = state
 
     
-    def setNodeName(self, name: str) -> None:
+    def set_node_name(self, name: str) -> None:
         """Sets node name in multinode setups"""
         self.name = name
 
 
-    def getNodeName(self) -> str:
+    def get_node_name(self) -> str:
         """Gets node name for multinode setups"""
         return self.name
 
 
-    def setMulticastGroup(self, group: str) -> None:
+    def set_multicast_group(self, group: str) -> None:
         self.multicast_group = group
 
 
-    def getMulticastGroup(self) -> str:
+    def get_multicast_group(self) -> str:
         return self.multicast_group
 
 
-    def setMulticastPassword(self, password) -> None:
+    def set_multicast_password(self, password) -> None:
         self.multicast_password = password
 
     
-    def getMulticastPassword(self) -> str:
+    def get_multicast_password(self) -> str:
         return self.multicast_password
 
 
-    def setMulticastPort(self, port: int) -> None:
+    def set_multicast_port(self, port: int) -> None:
         self.multicast_port = port
 
 
-    def getMulticastPort(self) -> int:
+    def get_multicast_port(self) -> int:
         return self.multicast_port
 
 
@@ -126,14 +126,14 @@ class Balancer:
 
 
     def heartbeat(self):
-        mcast_group = (self.getMulticastGroup(), self.getMulticastPort())
-        if self.getType() == "primary":
-            mtx = MulticastTx(self.getNodeName(), "primary", mcast_group)
+        mcast_group = (self.get_multicast_group(), self.get_multicast_port())
+        if self.get_type() == "primary":
+            mtx = MulticastTx(self.get_node_name(), "primary", mcast_group)
             mtx.set_sock_timeout(10) # This must happen before a socket instance is created
             sock = mtx.create_socket()
             time = datetime.datetime.now().strftime('%H:%M:%S.%f')
             msgdata = {"heartbeat": time}
-            tx = mtx.create_message(msgdata, self.getMulticastPassword())
+            tx = mtx.create_message(msgdata, self.get_multicast_password())
             recv = mtx.mcast_message(tx, sock)
 
             if recv is not None:
@@ -151,23 +151,23 @@ class Balancer:
 
         log.info(f"--- Bootstrapping started at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
         if cfg["bindip"] == "lan":
-            ifip = self.getInterfaceIP(self.getInterface())
-            log.info(f"Interface {self.getInterface()} has IP {ifip}")
+            ifip = self.get_interface_ip(self.get_interface())
+            log.info(f"Interface {self.get_interface()} has IP {ifip}")
         else:
             ifip = cfg["bindip"]
             log.info(f"Configured IP is {ifip}")
 
-        if self.getNodeName() == "auto" or self.getNodeName() == "":
-            self.setNodeName(Helpers().generateNodeName())
+        if self.get_node_name() == "auto" or self.get_node_name() == "":
+            self.set_node_name(Helpers().generate_node_name())
 
-        log.info(f"Node name is set to {self.getNodeName()}")
-        print(f"Node name is set to {self.getNodeName()}")
+        log.info(f"Node name is set to {self.get_node_name()}")
+        print(f"Node name is set to {self.get_node_name()}")
 
-        self.setMulticastGroup(cfg["multicast_group"])
-        log.debug(f"Multicast group set to {self.getMulticastGroup()}")
-        self.setMulticastPort(cfg["multicast_port"])
-        log.debug(f"Multicast port set to {self.getMulticastPort()}")
-        self.setMulticastPassword(cfg["network_password"])
+        self.set_multicast_group(cfg["multicast_group"])
+        log.debug(f"Multicast group set to {self.get_multicast_group()}")
+        self.set_multicast_port(cfg["multicast_port"])
+        log.debug(f"Multicast port set to {self.get_multicast_port()}")
+        self.set_multicast_password(cfg["network_password"])
 
         if self.static_mtu == True and self.no_mtu == True:
             log.error("Do not use --staticmtu and --nomtu together")
@@ -177,25 +177,25 @@ class Balancer:
         elif self.no_mtu == True:
             log.info(f"This node will not attempt to change {self.ifname} MTU")
         else:
-            self.setMTU(self.pmtu)
-            log.info(f"MTU of {self.getInterface()} set to {self.pmtu}")
+            self.set_mtu(self.pmtu)
+            log.info(f"MTU of {self.get_interface()} set to {self.pmtu}")
         
-        if self.getSelectionAlgorithm() == "latency":
+        if self.get_selection_algorithm() == "latency":
             log.info(f"- Upstream node latency test started at {datetime.datetime.now().strftime('%H:%M:%S on %x')} -")
-            latencyhost = slib.pickLatencyHost()
+            latencyhost = slib.pick_latency_host()
             host, port = latencyhost["host"].split(':')
             log.info(f"- Upstream node latency test ended at {datetime.datetime.now().strftime('%H:%M:%S on %x')} -")
-        elif self.getSelectionAlgorithm() == "roundrobin":
+        elif self.get_selection_algorithm() == "roundrobin":
             host, port = cfg["servers"][0].split(':')
             log.info(f"First host will be {host}:{port}")
 
         fi = ForwardIngress(
             self,
-            self.getInterface(),
+            self.get_interface(),
             ifip,
             cfg["bindport"])
         
-        fi.setInitHost(host, port)
+        fi.set_init_host(host, port)
 
         log.info(f"--- Bootstrapping finished at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
         #self.runThreaded(fi.setHost)
@@ -204,13 +204,13 @@ class Balancer:
         # Ideally exit with 0 here, but GIL exists
 
 
-    def runThreaded(self, job_func, args):
+    def run_threaded(self, job_func, args):
         """Runs a function in a new thread"""
         job_thread = threading.Thread(target = job_func, args = (args,))
         job_thread.start()
 
         
-    def setNodeConnectionTimeout(self, timeout: int) -> bool:
+    def set_node_connection_timeout(self, timeout: int) -> bool:
         """
         Sets the node connection timeout in milliseconds
         This determines how long the node will wait for a response
@@ -225,21 +225,21 @@ class Balancer:
             return False
 
 
-    def getNodeConnectionTimeout(self) -> int:
+    def get_node_connection_timeout(self) -> int:
         """Returns the connection/liveness reply timeout period in milliseconds"""
         return self.timeout
 
 
-    def getType(self) -> str:
+    def get_type(self) -> str:
         """Returns the mode of operation - primary or backup"""
         return self.type
 
     
-    def getMTU(self) -> int:
+    def get_mtu(self) -> int:
         """Returns the MTU (maximum transmission unit) of the current interface"""
 
         lif = LibIface(self.ifname)
-        sysmtu = lif.getMTU()
+        sysmtu = lif.get_mtu()
 
         if sysmtu != self.pmtu:
             log.warning("Interface MTU modified externally! Expected {} but found {}".format(self.pmtu, sysmtu))
@@ -247,47 +247,47 @@ class Balancer:
         return sysmtu
 
 
-    def setMTU(self, mtu: int) -> bool:
+    def set_mtu(self, mtu: int) -> bool:
         """Sets MTU (maximum transmission unit) for the current interface"""
 
         lif = LibIface(self.ifname)
 
         if self.no_mtu == False and self.static_mtu == False:
             # Set system MTU first
-            newmtu = lif.setMTU(mtu)
+            newmtu = lif.set_mtu(mtu)
             # Set instance MTU
             self.pmtu = newmtu
         elif self.static_mtu == True:
-            newmtu = lif.setMTU(self.pmtu)
+            newmtu = lif.set_mtu(self.pmtu)
         else:
             return 2
 
         # Check and report
-        if self.pmtu == lif.getMTU():
+        if self.pmtu == lif.get_mtu():
             return True
         else:
             return False
 
 
-    def setInterface(self, interface: str) -> None:
+    def set_interface(self, interface: str) -> None:
         """Sets the interface to use for operation"""
         self.ifname = interface
 
 
-    def getInterface(self) -> str:
+    def get_interface(self) -> str:
         """Returns the name of the current interface in use"""
         return self.ifname
 
 
-    def setSelectionAlgorithm(self, algorithm: str) -> None:
+    def set_selection_algorithm(self, algorithm: str) -> None:
         self.algorithm = algorithm
 
 
-    def getSelectionAlgorithm(self) -> str:
+    def get_selection_algorithm(self) -> str:
         return self.algorithm
 
     
-    def getHostname(self) -> str:
+    def get_hostname(self) -> str:
         """
         Returns the node's hostname
         Note: This is the device name, not the LB node name
@@ -295,7 +295,7 @@ class Balancer:
         return socket.gethostname()
 
 
-    def getInterfaceIP(self, interface: str) -> str:
+    def get_interface_ip(self, interface: str) -> str:
         """Returns the IP address of a specific interface"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return socket.inet_ntoa(ioctl
@@ -306,12 +306,12 @@ class Balancer:
                                     bytes(interface.encode("utf-8"))))[20:24]) # Struct takes char[]
 
 
-    def setNodeName(self, name: str) -> None:
+    def set_node_name(self, name: str) -> None:
         """Sets the named node name for use in the network"""
         self.name = name
 
 
-    def getNodeName(self) -> str | None:
+    def get_node_name(self) -> str | None:
         """Returns the named node name for use in the network"""
         return self.name
 
@@ -327,7 +327,7 @@ class ForwardEgress:
         self.destport = destport
 
 
-    def __socketOptions(self, sock: socket, idle = 1, maxretrcount = 5, interval = 3, lingersecs = 5) -> None:
+    def __socket_options(self, sock: socket, idle = 1, maxretrcount = 5, interval = 3, lingersecs = 5) -> None:
         """Sets socket options, also configures the socket for keep-alive"""
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, idle)
@@ -337,14 +337,14 @@ class ForwardEgress:
 
 
     # This will block but that's okay
-    def forwardTraffic(self, data, writer, wait) -> bool:
+    def forward_traffic(self, data, writer, wait) -> bool:
         """Forwards the incoming traffic to a configured host"""
         ingestServer = socket.socket(family = socket.AF_INET, type = socket.SOCK_STREAM, proto = 0)
-        ingestServer.settimeout(self.balancer.getNodeConnectionTimeout())
+        ingestServer.settimeout(self.balancer.get_node_connection_timeout())
         ingestServer.setblocking(True) # Non-blocking raises EINPROGRESS (see errno.h)
 
         # Socket options - Tested on kernel version 5.15.49 and 5.18.0
-        self.__socketOptions(ingestServer, 1, 5, 3, 5)
+        self.__socket_options(ingestServer, 1, 5, 3, 5)
 
         # Attempt to initiate connection and forward traffic, then return response to client
         try:
@@ -361,29 +361,33 @@ class ForwardEgress:
                 state = ingestServer.sendall(data)
                 data = ingestServer.recv(2048)
 
-            size = Helpers().determinePayloadSize(data)
+            size = Helpers().determine_payload_size(data)
             log.debug(f"Server reply payload packet size is {size} bytes")
 
-            if size > self.balancer.getMTU():
-                log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
-                self.balancer.setMTU(size)
+            if size > self.balancer.get_mtu():
+                if size < 5000:
+                    log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
+                    self.balancer.set_mtu(size)
+                else:
+                    log.warning("Packet size is greater than interface MTU! It will not be changed as it exceeds the 5000 byte limit")
+                    log.info("Fragmentation may now occur")
 
             writer.write(data)
             # await writer.drain() # Suspend until buffer is fully flushed
             writer.close()
 
             return state # If return is None, then request was successful
-        except Exception as ex:
+        except Exception:
             raise # Reraise last exception
 
 
     @deprecation.deprecated(details = "Do not use")
-    async def checkNodeState(self) -> list | bool:
+    async def check_node_state(self) -> list | bool:
         slib = ServerLibrary(log)
-        result = await slib.PingHost(self.destination, self.destport)
+        result = await slib.ping_host(self.destination, self.destport)
 
         if result == True:
-            latencydata = slib.getLatencyToHost(self.destination)
+            latencydata = slib.get_latency_to_host(self.destination)
             return True
         else:
             return False
@@ -398,21 +402,21 @@ class ForwardIngress:
         self.bindip = ip
         self.port = port
         self.balancer = balancer
-        self.initParamsSet = False
+        self.init_params_set = False
         self.exit_request = False
 
 
-    def setInitHost(self, host: str, port: int) -> bool | None:
+    def set_init_host(self, host: str, port: int) -> bool | None:
         """Sets initial params for the server to function - single use function"""
-        if self.initParamsSet == False:
+        if self.init_params_set == False:
             self.dest = host
             self.destport = int(port)
-            self.initParamsSet = True
+            self.init_params_set = True
         else:
             return False
 
 
-    def setHost(self, repoll):
+    def set_host(self, repoll):
         time.sleep(30) # asyncio?
 
         if self.exit_request == True:
@@ -420,9 +424,9 @@ class ForwardIngress:
 
 
         # Set host
-        if self.balancer.getSelectionAlgorithm() == "latency":
+        if self.balancer.get_selection_algorithm() == "latency":
             log.info("Determining the best host")
-            host = ServerLibrary(log).pickLatencyHost()
+            host = ServerLibrary(log).pick_latency_host()
 
             hostip, hostport = host["host"].split(':')
 
@@ -430,9 +434,9 @@ class ForwardIngress:
             self.destport = int(hostport)
 
             log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
-        elif self.balancer.getSelectionAlgorithm() == "roundrobin":
-            lastHost = self.dest + ':' + str(self.destport)
-            host = ServerLibrary(log).pickRoundRobinHost(lastHost)
+        elif self.balancer.get_selection_algorithm() == "roundrobin":
+            lasthost = self.dest + ':' + str(self.destport)
+            host = ServerLibrary(log).pick_round_robin_host(lasthost)
 
             hostip, hostport = host.split(':')
 
@@ -441,7 +445,7 @@ class ForwardIngress:
 
             log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
 
-        self.setHost(repoll)
+        self.set_host(repoll)
 
 
     def get_loop(self):
@@ -456,7 +460,7 @@ class ForwardIngress:
         self.loop = loop
         
 
-    async def ingressServer(self):
+    async def ingress_server(self):
         flags = [socket.SOL_SOCKET, socket.SO_REUSEADDR]
         server = await asyncio.start_server(self.response, self.bindip, self.port, family = socket.AF_INET, flags = flags)
 
@@ -469,7 +473,7 @@ class ForwardIngress:
     async def response(self, reader, writer): # NOTE: writer will write data back to client in this instance
         data = await reader.read(2048)
 
-        size = Helpers().determinePayloadSize(data)
+        size = Helpers().determine_payload_size(data)
         log.debug(f"Client payload packet size is {size} bytes")
 
         # This will replace the host address header
@@ -480,17 +484,20 @@ class ForwardIngress:
 
             data = bytes(bytestring.encode('utf-8'))
 
-            if size > self.balancer.getMTU():
-                log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
-                self.balancer.setMTU(size)
+            if size > self.balancer.get_mtu():
+                if size < 5000:
+                    log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
+                    self.balancer.set_mtu(size)
+                else:
+                    log.warning("Packet size is greater than interface MTU! It will not be changed as it exceeds the 5000 byte limit")
+                    log.info("Fragmentation may now occur")
 
-            traffic = ForwardEgress(self.dest, self.destport, self.balancer).forwardTraffic(data, writer, True)
+            traffic = ForwardEgress(self.dest, self.destport, self.balancer).forward_traffic(data, writer, True)
 
             if traffic != None:
                 log.error("The request failed!")
         except:
-            log.warning("Non-HTTP request received! Ignoring.")
-            pass
+            log.warning("Invalid data received or the kernel refused to change system MTU - check logs")
 
 
 if __name__ == "__main__":
@@ -514,12 +521,12 @@ if __name__ == "__main__":
                     print("balancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
                     sys.exit(1)
                 elif opt in ("-i", "--iface"):
-                    balancer.setInterface(arg)
+                    balancer.set_interface(arg)
                 elif opt in ("-m", "--staticmtu"):
-                    balancer.setMTU(int(arg))
-                    balancer.useStaticMTU(True)
+                    balancer.set_mtu(int(arg))
+                    balancer.use_static_mtu(True)
                 elif opt in ("-n", "--nomtu"):
-                    balancer.noMTUChange(True)
+                    balancer.no_mtu_change(True)
                 elif opt in ("-c", "--conf"):
                     cfg = helpers.ConfigParser(arg)
     except getopt.GetoptError:
@@ -531,16 +538,19 @@ if __name__ == "__main__":
             future = executor.submit(balancer.bootstrap, cfg)
             fi = future.result()["forwardingress"]
             balancer_instance = future.result()["balancer"]
-            schedule.every(2).seconds.do(balancer_instance.heartbeat)
-            balancer_instance.runThreaded(fi.setHost, cfg["repoll_time"])
+            schedule.every(cfg["heartbeat_time"]).seconds.do(balancer_instance.heartbeat)
+            balancer_instance.run_threaded(fi.set_host, cfg["repoll_time"])
             stop_run_continuously = balancer_instance.run_continuously()
-            asyncio.run(fi.ingressServer())
+            asyncio.run(fi.ingress_server())
     except KeyboardInterrupt:
         stop_run_continuously.set()
         fi.set_thread_exit()
         log.debug("Waiting for threads to exit")
-        print("Interrupt again to force shutdown")
-        time.sleep(cfg["repoll_time"])
+        print("Interrupt again TWICE to force shutdown\nThis is because there are two threading instances that need to be terminated")
+        try:
+            time.sleep(cfg["repoll_time"])
+        except KeyboardInterrupt:
+            sys.exit(1)
         Helpers().shutdown(fi.get_loop())
         future.cancel()
         log.info("Shutdown complete")

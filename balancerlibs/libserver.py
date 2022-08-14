@@ -35,6 +35,7 @@ class Helpers:
          "default_pmtu": int,
          "ifname": str,
          "timeout": int,
+         "heartbeat_time": int,
          "repoll_time": int,
          "algorithm": str,
          "servers": list}
@@ -57,7 +58,7 @@ class Helpers:
         return configdict
 
 
-    def generateNodeName(self) -> str:
+    def generate_node_name(self) -> str:
         nouns = open("nouns.txt", "r")
         adjectives = open("adjectives.txt", "r")
 
@@ -78,7 +79,7 @@ class Helpers:
         return line
 
 
-    def determinePayloadSize(self, payload):
+    def determine_payload_size(self, payload):
         # Object must be bytes
         if isinstance(payload, bytes):
             return len(payload)
@@ -101,7 +102,7 @@ class ServerLibrary:
         self.log = log
 
 
-    async def PingHost(self, host, port, duration = 10, delay = 2) -> bool:
+    async def ping_host(self, host, port, duration = 10, delay = 2) -> bool:
         """Repeatedly try if a port on a host is open until duration seconds passed
         
         Parameters
@@ -135,7 +136,7 @@ class ServerLibrary:
 
 
     # Rework the selection - maybe use avg latency tested every n seconds?
-    def __calculateNewScore(self, avglatency, score) -> float:
+    def __calculate_new_score(self, avglatency, score) -> float:
         if avglatency > 0.2:
             pts = avglatency / 10 # This should result in a low value
             if pts >= 1.0:
@@ -146,14 +147,14 @@ class ServerLibrary:
             return round(score - avglatency, 6)
 
 
-    def getLatencyToMultipleHosts(self, hosts, interval = 1, threshold = 0.05, repetitions = 5) -> list:
+    def get_latency_to_multiple_hosts(self, hosts, interval = 1, threshold = 0.05, repetitions = 5) -> list:
         results = []
 
         if type(hosts) != list:
             raise TypeError(f"Function expected a list, but got {type(hosts)}")
         else:
             for host_array in hosts:
-                item = self.getLatencyToHost(host_array[0][0], host_array[1], interval, threshold, repetitions)
+                item = self.get_latency_to_host(host_array[0][0], host_array[1], interval, threshold, repetitions)
                 item["host"] = host_array[0][0] + ":" + host_array[0][1]
                 results.append(item)
 
@@ -161,7 +162,7 @@ class ServerLibrary:
 
         
     # Sub-second threshold values might cause a time out due to request throttling
-    def getLatencyToHost(self, host, ttl = 64, interval = 1, threshold = 0.05, repetitions = 5) -> dict:
+    def get_latency_to_host(self, host, ttl = 64, interval = 1, threshold = 0.05, repetitions = 5) -> dict:
 
         # Source: https://github.com/FlipperPA/latency-tester/blob/main/latency-tester.py
 
@@ -184,6 +185,8 @@ class ServerLibrary:
                 avglatency = (avglatency + latency) / repetitions
             else:
                 self.log.warning("Request timed out")
+                if count <= 2:
+                    avglatency = 9999
                 break
 
             if latency is None:
@@ -194,11 +197,14 @@ class ServerLibrary:
             line = f"{datetime.datetime.now()}: Sent ICMP packet to {host}; latency is {latency_text}"
             self.log.debug(line)
             if latency > threshold:
-                score = self.__calculateNewScore(avglatency, items["score"])
+                score = self.__calculate_new_score(avglatency, items["score"])
                 items["score"] = score
                 self.log.info(f"Latency is high, selection score is now {score}")
                 
-            items["latency"] = round(avglatency, 4)
+            if avglatency < 0.000001:
+                items["latency"] = 9999
+            else:
+                items["latency"] = round(avglatency, 4)
             items["host"] = host
             sleep(interval)
         self.log.debug(f"Average latency was {items['latency']}")
@@ -206,7 +212,7 @@ class ServerLibrary:
         return items
 
     
-    def pickRoundRobinHost(self, lastHost: str) -> str:
+    def pick_round_robin_host(self, lasthost: str) -> str:
         # Get all hosts
         config = Helpers().ConfigParser()
         hostlist = config["servers"]
@@ -217,16 +223,16 @@ class ServerLibrary:
             hosts[idx] = host
 
         # Find the index of the host - this is expensive
-        lastHostIndex = list(hosts.keys())[list(hosts.values()).index(lastHost)]
+        lasthostindex = list(hosts.keys())[list(hosts.values()).index(lasthost)]
 
         # Does the next index value make sense?
-        if lastHostIndex + 1 >= len(hosts):
+        if lasthostindex + 1 >= len(hosts):
             return hosts[0] # If not, start from 0
         else:
-            return hosts[lastHostIndex + 1] # If it does, return the value
+            return hosts[lasthostindex + 1] # If it does, return the value
 
 
-    def pickLatencyHost(self, ttl = 64) -> dict:
+    def pick_latency_host(self, ttl = 64) -> dict:
         # First get all hosts
         config = Helpers().ConfigParser()
         hostlist = config["servers"]
@@ -238,7 +244,7 @@ class ServerLibrary:
             host_ttl.append([[ip, port], ttl])
 
         # Great, now we need to test their latency
-        latencies = self.getLatencyToMultipleHosts(host_ttl)
+        latencies = self.get_latency_to_multiple_hosts(host_ttl)
        
         # Get only latencies
         latency = []

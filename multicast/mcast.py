@@ -72,7 +72,7 @@ class MulticastTx:
                 socket.close()
                 return {"data": data, "server": server[0]}
 
-# --- SAMPLE USE --- DO NOT USE --- #
+# --- SAMPLE --- DO NOT USE --- #
 # https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml
 """
 adv = MulticastTx("node", "primary", ("224.3.29.71", 10000))
@@ -147,7 +147,7 @@ class MulticastRx:
             return {"data": validate, "address": address[0]}
 
 
-# --- SAMPLE USE --- DO NOT USE --- #
+# --- SAMPLE --- DO NOT USE --- #
 """
 mcast = MulticastRx((("224.3.29.71", 10000)))
 mcast.set_timeout(30)

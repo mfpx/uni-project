@@ -47,7 +47,7 @@ class LibIface:
         print("MTU (Maximum Transmission Unit) management tool\nDo not call the class directly, instantiate it first!")
 
 
-    def getAddressMTU(self, ip: str) -> int:
+    def get_address_mtu(self, ip: str) -> int:
         """
         Returns MTU for a specified IP address
         Using REGEXP (P is the additional features from Perl) and iproute2
@@ -61,7 +61,7 @@ class LibIface:
         return int(mtu)
 
 
-    def getMTU(self) -> int:
+    def get_mtu(self) -> int:
         """
         Retrieves MTU using socket ioctl syscall
         """
@@ -71,8 +71,8 @@ class LibIface:
         try:
             ifs = ioctl(sock, SIOCGIFMTU, ifr)
             mtu = struct.unpack('<H',ifs[16:18])[0]
-        except Exception as s:
-            log.critical('socket ioctl call failed: {0}'.format(s))
+        except Exception:
+            log.critical('Socket ioctl call failed: {0}'.format(s))
             raise
 
         log.debug('getMTU: mtu of {0} = {1}'.format(self.ifname, mtu))
@@ -80,7 +80,7 @@ class LibIface:
         return mtu
 
 
-    def setMTU(self, mtu: int) -> int:
+    def set_mtu(self, mtu: int) -> int:
         """
         Uses socket ioctl syscall to set the MTU
         """
@@ -97,10 +97,10 @@ class LibIface:
 
         log.debug('setMTU: mtu of {0} = {1}'.format(self.ifname, self.mtu))
 
-        return self.getMTU()
+        return self.get_mtu()
 
 
-    def getAvailableIfaces(self, ifa = 0) -> list:
+    def get_available_ifaces(self, ifa = 0) -> list:
         """
         Returns available network interfaces on the system and their information
         """
@@ -152,6 +152,6 @@ if __name__ == "__main__":
 
     iface = LibIface(dev)
     if mtu != None:
-        iface.setMTU(int(mtu))
+        iface.set_mtu(int(mtu))
 
-    print (f"Interface \"{dev}\" has an MTU of {iface.getMTU()}")
+    print (f"Interface \"{dev}\" has an MTU of {iface.get_mtu()}")
