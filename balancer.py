@@ -4,8 +4,9 @@ from fcntl import ioctl
 import threading
 from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
-from schedule import *
+import schedule
 from datetime import datetime
+from multicast.mcast import *
 # Load Balancer Core
 # HIGHLY EXPERIMENTAL - NATURALLY POC ONLY!
 
@@ -40,6 +41,9 @@ class Balancer:
         self.name = name # Balancer node name
         self.static_mtu = False # Use static MTU
         self.no_mtu = False # Do not change interface MTU at all
+        self.multicast_group = "" # Multicast group IP
+        self.multicast_port = 0 # Multicast group port
+        self.multicast_password = "" # Multicast encryption password
 
 
     def __call__(self):
@@ -67,16 +71,82 @@ class Balancer:
         return self.name
 
 
+    def setMulticastGroup(self, group: str) -> None:
+        self.multicast_group = group
+
+
+    def getMulticastGroup(self) -> str:
+        return self.multicast_group
+
+
+    def setMulticastPassword(self, password) -> None:
+        self.multicast_password = password
+
+    
+    def getMulticastPassword(self) -> str:
+        return self.multicast_password
+
+
+    def setMulticastPort(self, port: int) -> None:
+        self.multicast_port = port
+
+
+    def getMulticastPort(self) -> int:
+        return self.multicast_port
+
+
     async def shutdown(self, loop):
         loop.close()
         await loop.wait_closed()
+
+    # https://schedule.readthedocs.io/en/stable/background-execution.html
+    def run_continuously(self, interval=1):
+        """Continuously run, while executing pending jobs at each
+        elapsed time interval.
+        @return cease_continuous_run: threading. Event which can
+        be set to cease continuous run. Please note that it is
+        *intended behavior that run_continuously() does not run
+        missed jobs*. For example, if you've registered a job that
+        should run every minute and you set a continuous run
+        interval of one hour then your job won't be run 60 times
+        at each interval but only once.
+        """
+        cease_continuous_run = threading.Event()
+
+        class ScheduleThread(threading.Thread):
+            @classmethod
+            def run(cls):
+                while not cease_continuous_run.is_set():
+                    schedule.run_pending()
+                    time.sleep(interval)
+
+        continuous_thread = ScheduleThread()
+        continuous_thread.start()
+        return cease_continuous_run
+
+
+    def heartbeat(self):
+        mcast_group = (self.getMulticastGroup(), self.getMulticastPort())
+        if self.getType() == "primary":
+            mtx = MulticastTx(self.getNodeName(), "primary", mcast_group)
+            mtx.set_sock_timeout(10) # This must happen before a socket instance is created
+            sock = mtx.create_socket()
+            time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+            msgdata = {"heartbeat": time}
+            tx = mtx.create_message(msgdata, self.getMulticastPassword())
+            recv = mtx.mcast_message(tx, sock)
+
+            if recv['data'] == b'ack':
+                recvtime = datetime.datetime.now().strftime('%H:%M:%S.%f')
+                diff = datetime.datetime.strptime(recvtime, '%H:%M:%S.%f') - datetime.datetime.strptime(time, '%H:%M:%S.%f')
+                log.debug(f"Heartbeat acknowledged by {recv['server']} in {diff.microseconds / 1000}ms")
 
 
     def bootstrap(self, cfg):
         self.cfg = cfg
         slib = ServerLibrary(log)
 
-        log.info(f"--- Bootstrapping started at {datetime.now().strftime('%H:%M:%S on %x')} ---")
+        log.info(f"--- Bootstrapping started at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
         if cfg["bindip"] == "lan":
             ifip = self.getInterfaceIP(self.getInterface())
             log.info(f"Interface {self.getInterface()} has IP {ifip}")
@@ -90,6 +160,12 @@ class Balancer:
         log.info(f"Node name is set to {self.getNodeName()}")
         print(f"Node name is set to {self.getNodeName()}")
 
+        self.setMulticastGroup(cfg["multicast_group"])
+        log.debug(f"Multicast group set to {self.getMulticastGroup()}")
+        self.setMulticastPort(cfg["multicast_port"])
+        log.debug(f"Multicast port set to {self.getMulticastPort()}")
+        self.setMulticastPassword(cfg["network_password"])
+
         if self.static_mtu == True and self.no_mtu == True:
             log.error("Do not use --staticmtu and --nomtu together")
             sys.exit(1)
@@ -102,10 +178,10 @@ class Balancer:
             log.info(f"MTU of {self.getInterface()} set to {self.pmtu}")
         
         if self.getSelectionAlgorithm() == "latency":
-            log.info(f"- Upstream node latency test started at {datetime.now().strftime('%H:%M:%S on %x')} -")
+            log.info(f"- Upstream node latency test started at {datetime.datetime.now().strftime('%H:%M:%S on %x')} -")
             latencyhost = slib.pickLatencyHost()
             host, port = latencyhost["host"].split(':')
-            log.info(f"- Upstream node latency test ended at {datetime.now().strftime('%H:%M:%S on %x')} -")
+            log.info(f"- Upstream node latency test ended at {datetime.datetime.now().strftime('%H:%M:%S on %x')} -")
         elif self.getSelectionAlgorithm() == "roundrobin":
             host, port = cfg["servers"][0].split(':')
             log.info(f"First host will be {host}:{port}")
@@ -118,7 +194,7 @@ class Balancer:
         
         fi.setInitHost(host, port)
 
-        log.info(f"--- Bootstrapping finished at {datetime.now().strftime('%H:%M:%S on %x')} ---")
+        log.info(f"--- Bootstrapping finished at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
         #self.runThreaded(fi.setHost)
 
         return fi
@@ -411,7 +487,7 @@ class ForwardIngress:
                 log.error("The request failed!")
         except:
             log.warning("Non-HTTP request received! Ignoring.")
-            raise
+            pass
 
 
 if __name__ == "__main__":
@@ -448,12 +524,16 @@ if __name__ == "__main__":
         sys.exit(1)
 
     try:
-        with concurrent.futures.ProcessPoolExecutor(max_workers = 5) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers = cfg["thread_count"]) as executor:
             future = executor.submit(balancer.bootstrap, cfg)
             fi = future.result()
-            hostloop = balancer.runThreaded(fi.setHost, cfg["repoll_time"])
+            schedule.every(2).seconds.do(balancer.heartbeat)
+            balancer.runThreaded(fi.setHost, cfg["repoll_time"])
+            print(balancer.getNodeName(), balancer.getInterface())
+            stop_run_continuously = balancer.run_continuously()
             asyncio.run(fi.ingressServer())
     except KeyboardInterrupt:
+        stop_run_continuously.set()
         fi.set_thread_exit()
         log.debug("Waiting for threads to exit")
         time.sleep(cfg["repoll_time"])

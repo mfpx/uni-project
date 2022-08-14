@@ -1,9 +1,13 @@
 hostname: "auto" # Node name, auto to generate one automatically
 node_type: "primary" # Node type, primary or backup
 bindip: "127.0.0.1" # IP to bind to, or lan to use the interface IP
+multicast_group: "224.3.29.71" # Multicast group IP to use
+network_password: "password" # Password to use in inter-node communication
+multicast_port: 10000 # Multicast port to use
+thread_count: 5 # Number of threads to use
 bindport: 8000 # Port the balancer will bind to
 default_pmtu: 1500 # Initial MTU to set, ignored if --nomtu or --staticmtu are used
-ifname: "enp4s0" # Local interface to use
+ifname: "wlp0s20f3" # Local interface to use
 timeout: 30 # Connection/liveness timeout
 repoll_time: 30 # How long the server will wait between latency tests etc
 algorithm: "latency" # Server selection algorithm, latency or roundrobin

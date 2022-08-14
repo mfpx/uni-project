@@ -27,6 +27,10 @@ class Helpers:
          "hostname": str,
          "node_type": str,
          "bindip": str,
+         "multicast_group": str,
+         "multicast_port": int,
+         "network_password": str,
+         "thread_count": int,
          "bindport": int,
          "default_pmtu": int,
          "ifname": str,
@@ -41,7 +45,7 @@ class Helpers:
 
         for key in configdict:
             if not isinstance(configdict[key], CONFIG_CONTENTS[key]):
-                return -1
+                raise
 
         for ipaddr in configdict['servers']:
             ip, port = ipaddr.split(':')

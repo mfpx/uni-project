@@ -60,13 +60,13 @@ class MulticastTx:
     def mcast_message(self, msg: bytes, socket: socket) -> dict:
         """Sends a message to the multicast group"""
         sent = socket.sendto(msg, self.mcast_group)
-        print(f"Socket returned {sent}")
+        #print(f"Socket returned {sent}")
 
         while True:
             try:
                 data, server = socket.recvfrom(16)
             except TimeoutError:
-                print("Socket timeout reached")
+                #print("Socket timeout reached")
                 break
             else:
                 socket.close()
@@ -89,8 +89,8 @@ print(recv)
 """
 Responses:
 ack - packet received and will be processed
-nak - packet received but will not be processed (TO DO)
-malformed - packet received, but the payload was not understood (TO DO)
+nak - packet received but will not be processed (TODO)
+malformed - packet received, but the payload was not understood
 """
 
 class MulticastRx:
