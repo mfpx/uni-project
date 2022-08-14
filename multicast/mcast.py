@@ -64,7 +64,7 @@ class MulticastTx:
 
         while True:
             try:
-                data, server = socket.recvfrom(16)
+                data, server = socket.recvfrom(128)
             except TimeoutError:
                 #print("Socket timeout reached")
                 break

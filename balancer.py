@@ -136,10 +136,13 @@ class Balancer:
             tx = mtx.create_message(msgdata, self.getMulticastPassword())
             recv = mtx.mcast_message(tx, sock)
 
-            if recv['data'] == b'ack':
-                recvtime = datetime.datetime.now().strftime('%H:%M:%S.%f')
-                diff = datetime.datetime.strptime(recvtime, '%H:%M:%S.%f') - datetime.datetime.strptime(time, '%H:%M:%S.%f')
-                log.debug(f"Heartbeat acknowledged by {recv['server']} in {diff.microseconds / 1000}ms")
+            if recv is not None:
+                if recv['data'] == b'ack':
+                    recvtime = datetime.datetime.now().strftime('%H:%M:%S.%f')
+                    diff = datetime.datetime.strptime(recvtime, '%H:%M:%S.%f') - datetime.datetime.strptime(time, '%H:%M:%S.%f')
+                    log.debug(f"Heartbeat acknowledged by {recv['server']} in {diff.microseconds / 1000}ms")
+            else:
+                log.debug("Heartbeat not acknowledged by any node")
 
 
     def bootstrap(self, cfg):
@@ -197,7 +200,7 @@ class Balancer:
         log.info(f"--- Bootstrapping finished at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
         #self.runThreaded(fi.setHost)
 
-        return fi
+        return {"forwardingress": fi, "balancer": self}
         # Ideally exit with 0 here, but GIL exists
 
 
@@ -526,16 +529,17 @@ if __name__ == "__main__":
     try:
         with concurrent.futures.ProcessPoolExecutor(max_workers = cfg["thread_count"]) as executor:
             future = executor.submit(balancer.bootstrap, cfg)
-            fi = future.result()
-            schedule.every(2).seconds.do(balancer.heartbeat)
-            balancer.runThreaded(fi.setHost, cfg["repoll_time"])
-            print(balancer.getNodeName(), balancer.getInterface())
-            stop_run_continuously = balancer.run_continuously()
+            fi = future.result()["forwardingress"]
+            balancer_instance = future.result()["balancer"]
+            schedule.every(2).seconds.do(balancer_instance.heartbeat)
+            balancer_instance.runThreaded(fi.setHost, cfg["repoll_time"])
+            stop_run_continuously = balancer_instance.run_continuously()
             asyncio.run(fi.ingressServer())
     except KeyboardInterrupt:
         stop_run_continuously.set()
         fi.set_thread_exit()
         log.debug("Waiting for threads to exit")
+        print("Interrupt again to force shutdown")
         time.sleep(cfg["repoll_time"])
         Helpers().shutdown(fi.get_loop())
         future.cancel()
