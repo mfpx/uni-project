@@ -1,4 +1,5 @@
 import socket, asyncio, logging, struct, getopt, sys, deprecation
+import re
 import concurrent.futures
 from fcntl import ioctl
 import threading
@@ -6,7 +7,8 @@ from balancerlibs.libserver import ServerLibrary, Helpers
 from balancerlibs.libnet import LibIface
 import schedule
 from datetime import datetime
-from multicast.mcast import *
+import time
+from multicast.mcast import MulticastTx, MulticastRx
 # Load Balancer Core
 # HIGHLY EXPERIMENTAL - NATURALLY POC ONLY!
 
@@ -131,25 +133,32 @@ class Balancer:
             mtx = MulticastTx(self.get_node_name(), "primary", mcast_group)
             mtx.set_sock_timeout(10) # This must happen before a socket instance is created
             sock = mtx.create_socket()
-            time = datetime.datetime.now().strftime('%H:%M:%S.%f')
-            msgdata = {"heartbeat": time}
+            ts = datetime.now().strftime('%H:%M:%S.%f')
+            msgdata = {"heartbeat": ts}
             tx = mtx.create_message(msgdata, self.get_multicast_password())
             recv = mtx.mcast_message(tx, sock)
 
             if recv is not None:
                 if recv['data'] == b'ack':
-                    recvtime = datetime.datetime.now().strftime('%H:%M:%S.%f')
-                    diff = datetime.datetime.strptime(recvtime, '%H:%M:%S.%f') - datetime.datetime.strptime(time, '%H:%M:%S.%f')
+                    recvtime = datetime.now().strftime('%H:%M:%S.%f')
+                    diff = datetime.strptime(recvtime, '%H:%M:%S.%f') - datetime.strptime(ts, '%H:%M:%S.%f')
                     log.debug(f"Heartbeat acknowledged by {recv['server']} in {diff.microseconds / 1000}ms")
             else:
                 log.debug("Heartbeat not acknowledged by any node")
+
+
+    async def heartbeat_loop(self, interval: int) -> None:
+        """Async loop that runs the blocking heartbeat in a thread every `interval` seconds"""
+        while True:
+            await asyncio.to_thread(self.heartbeat)
+            await asyncio.sleep(interval)
 
 
     def bootstrap(self, cfg):
         self.cfg = cfg
         slib = ServerLibrary(log)
 
-        log.info(f"--- Bootstrapping started at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
+        log.info(f"--- Bootstrapping started at {datetime.now().strftime('%H:%M:%S on %x')} ---")
         if cfg["bindip"] == "lan":
             ifip = self.get_interface_ip(self.get_interface())
             log.info(f"Interface {self.get_interface()} has IP {ifip}")
@@ -181,10 +190,10 @@ class Balancer:
             log.info(f"MTU of {self.get_interface()} set to {self.pmtu}")
         
         if self.get_selection_algorithm() == "latency":
-            log.info(f"- Upstream node latency test started at {datetime.datetime.now().strftime('%H:%M:%S on %x')} -")
+            log.info(f"- Upstream node latency test started at {datetime.now().strftime('%H:%M:%S on %x')} -")
             latencyhost = slib.pick_latency_host()
             host, port = latencyhost["host"].split(':')
-            log.info(f"- Upstream node latency test ended at {datetime.datetime.now().strftime('%H:%M:%S on %x')} -")
+            log.info(f"- Upstream node latency test ended at {datetime.now().strftime('%H:%M:%S on %x')} -")
         elif self.get_selection_algorithm() == "roundrobin":
             host, port = cfg["servers"][0].split(':')
             log.info(f"First host will be {host}:{port}")
@@ -197,7 +206,7 @@ class Balancer:
         
         fi.set_init_host(host, port)
 
-        log.info(f"--- Bootstrapping finished at {datetime.datetime.now().strftime('%H:%M:%S on %x')} ---")
+        log.info(f"--- Bootstrapping finished at {datetime.now().strftime('%H:%M:%S on %x')} ---")
         #self.runThreaded(fi.setHost)
 
         return {"forwardingress": fi, "balancer": self}
@@ -336,30 +345,35 @@ class ForwardEgress:
         #sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, lingersecs)
 
 
-    # This will block but that's okay
-    def forward_traffic(self, data, writer, wait) -> bool:
-        """Forwards the incoming traffic to a configured host"""
-        ingestServer = socket.socket(family = socket.AF_INET, type = socket.SOCK_STREAM, proto = 0)
-        ingestServer.settimeout(self.balancer.get_node_connection_timeout())
-        ingestServer.setblocking(True) # Non-blocking raises EINPROGRESS (see errno.h)
-
-        # Socket options - Tested on kernel version 5.15.49 and 5.18.0
-        self.__socket_options(ingestServer, 1, 5, 3, 5)
-
-        # Attempt to initiate connection and forward traffic, then return response to client
+    async def forward_traffic(self, data, writer, wait) -> bool:
+        """Forwards the incoming traffic to a configured host using asyncio streams"""
         try:
-            ingestServer.connect((self.destination, self.destport))
+            reader_remote, writer_remote = await asyncio.open_connection(self.destination, self.destport)
+            # Apply socket options to the underlying socket if available
+            sock = writer_remote.get_extra_info('socket')
+            if sock:
+                self.__socket_options(sock, 1, 5, 3, 5)
+
             if wait != False:
-                state = ingestServer.sendall(data, socket.MSG_WAITALL)
+                writer_remote.write(data)
+                await writer_remote.drain()
                 data = b''
-                while True: # Read the entire socket buffer
-                    datastream = ingestServer.recv(2048, socket.MSG_WAITALL)
-                    if len(datastream) <= 0:
+                while True:
+                    chunk = await reader_remote.read(2048)
+                    if not chunk:
                         break
-                    data += datastream
+                    data += chunk
             else:
-                state = ingestServer.sendall(data)
-                data = ingestServer.recv(2048)
+                writer_remote.write(data)
+                await writer_remote.drain()
+                data = await reader_remote.read(2048)
+
+            # Close remote writer
+            try:
+                writer_remote.close()
+                await writer_remote.wait_closed()
+            except Exception:
+                pass
 
             size = Helpers().determine_payload_size(data)
             log.debug(f"Server reply payload packet size is {size} bytes")
@@ -367,16 +381,22 @@ class ForwardEgress:
             if size > self.balancer.get_mtu():
                 if size < 5000:
                     log.warning("Packet size is greater than interface MTU! It will now be changed to prevent fragmentation")
-                    self.balancer.set_mtu(size)
+                    # Run potentially blocking set_mtu in a thread to avoid blocking the loop
+                    await asyncio.to_thread(self.balancer.set_mtu, size)
                 else:
                     log.warning("Packet size is greater than interface MTU! It will not be changed as it exceeds the 5000 byte limit")
                     log.info("Fragmentation may now occur")
 
+            # Send back to the client
             writer.write(data)
-            # await writer.drain() # Suspend until buffer is fully flushed
-            writer.close()
+            await writer.drain()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
 
-            return state # If return is None, then request was successful
+            return None
         except Exception:
             raise # Reraise last exception
 
@@ -416,36 +436,35 @@ class ForwardIngress:
             return False
 
 
-    def set_host(self, repoll):
-        time.sleep(30) # asyncio?
+    async def host_loop(self, repoll: int) -> None:
+        """Periodic host selection loop (async). Set `exit_request` to True to stop."""
+        # Initial small delay to stagger startup
+        await asyncio.sleep(1)
+        while not self.exit_request:
+            # Set host
+            if self.balancer.get_selection_algorithm() == "latency":
+                log.info("Determining the best host")
+                host = ServerLibrary(log).pick_latency_host()
 
-        if self.exit_request == True:
-            return
+                hostip, hostport = host["host"].split(':')
 
+                self.dest = hostip
+                self.destport = int(hostport)
 
-        # Set host
-        if self.balancer.get_selection_algorithm() == "latency":
-            log.info("Determining the best host")
-            host = ServerLibrary(log).pick_latency_host()
+                log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
+            elif self.balancer.get_selection_algorithm() == "roundrobin":
+                lasthost = self.dest + ':' + str(self.destport)
+                host = ServerLibrary(log).pick_round_robin_host(lasthost)
 
-            hostip, hostport = host["host"].split(':')
+                hostip, hostport = host.split(':')
 
-            self.dest = hostip
-            self.destport = int(hostport)
+                self.dest = hostip
+                self.destport = int(hostport)
 
-            log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
-        elif self.balancer.get_selection_algorithm() == "roundrobin":
-            lasthost = self.dest + ':' + str(self.destport)
-            host = ServerLibrary(log).pick_round_robin_host(lasthost)
+                log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
 
-            hostip, hostport = host.split(':')
-
-            self.dest = hostip
-            self.destport = int(hostport)
-
-            log.info(f"Selected \"{self.dest}:{self.destport}\" as the destination")
-
-        self.set_host(repoll)
+            # Wait for next poll or exit
+            await asyncio.sleep(repoll)
 
 
     def get_loop(self):
@@ -461,8 +480,8 @@ class ForwardIngress:
         
 
     async def ingress_server(self):
-        flags = [socket.SOL_SOCKET, socket.SO_REUSEADDR]
-        server = await asyncio.start_server(self.response, self.bindip, self.port, family = socket.AF_INET, flags = flags)
+        # Use asyncio's reuse options rather than low-level socket flags
+        server = await asyncio.start_server(self.response, self.bindip, self.port, family = socket.AF_INET, reuse_address=True)
 
         self.__set_loop(server.get_loop())
 
@@ -492,7 +511,7 @@ class ForwardIngress:
                     log.warning("Packet size is greater than interface MTU! It will not be changed as it exceeds the 5000 byte limit")
                     log.info("Fragmentation may now occur")
 
-            traffic = ForwardEgress(self.dest, self.destport, self.balancer).forward_traffic(data, writer, True)
+            traffic = await ForwardEgress(self.dest, self.destport, self.balancer).forward_traffic(data, writer, True)
 
             if traffic != None:
                 log.error("The request failed!")
@@ -533,24 +552,40 @@ if __name__ == "__main__":
         print("Unknown argument\nbalancer.py [hmicn] --staticmtu= --iface= --conf= --nomtu")
         sys.exit(1)
 
-    try:
-        with concurrent.futures.ProcessPoolExecutor(max_workers = cfg["thread_count"]) as executor:
-            future = executor.submit(balancer.bootstrap, cfg)
-            fi = future.result()["forwardingress"]
-            balancer_instance = future.result()["balancer"]
-            schedule.every(cfg["heartbeat_time"]).seconds.do(balancer_instance.heartbeat)
-            balancer_instance.run_threaded(fi.set_host, cfg["repoll_time"])
-            stop_run_continuously = balancer_instance.run_continuously()
-            asyncio.run(fi.ingress_server())
-    except KeyboardInterrupt:
-        stop_run_continuously.set()
-        fi.set_thread_exit()
-        log.debug("Waiting for threads to exit")
-        print("Interrupt again TWICE to force shutdown\nThis is because there are two threading instances that need to be terminated")
+    async def _main_async():
+        # Bootstrap synchronously (may perform short blocking ops)
+        result = balancer.bootstrap(cfg)
+        fi = result["forwardingress"]
+        balancer_instance = result["balancer"]
+
+        # Start host selection and heartbeat loops as asyncio tasks
+        host_task = asyncio.create_task(fi.host_loop(cfg["repoll_time"]))
+        hb_task = asyncio.create_task(balancer_instance.heartbeat_loop(cfg["heartbeat_time"]))
+        server_task = asyncio.create_task(fi.ingress_server())
+
         try:
-            time.sleep(cfg["repoll_time"])
-        except KeyboardInterrupt:
-            sys.exit(1)
-        Helpers().shutdown(fi.get_loop())
-        future.cancel()
-        log.info("Shutdown complete")
+            await server_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            # Signal tasks to stop and cancel
+            fi.set_thread_exit()
+            host_task.cancel()
+            hb_task.cancel()
+            try:
+                await asyncio.gather(host_task, hb_task, return_exceptions=True)
+            except Exception:
+                pass
+            # Try to shutdown the server loop
+            try:
+                Helpers().shutdown(fi.get_loop())
+            except Exception:
+                pass
+
+    try:
+        asyncio.run(_main_async())
+    except KeyboardInterrupt:
+        log.info("Shutdown requested by user")
+        # Note: asyncio.run already cancels tasks on KeyboardInterrupt
+    
+    log.info("Shutdown complete")

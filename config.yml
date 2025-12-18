@@ -7,7 +7,7 @@ multicast_port: 10000 # Multicast port to use
 thread_count: 5 # Number of threads to use
 bindport: 8000 # Port the balancer will bind to
 default_pmtu: 1500 # Initial MTU to set, ignored if --nomtu or --staticmtu are used
-ifname: "enp4s0" # Local interface to use
+ifname: "eth0" # Local interface to use
 timeout: 30 # Connection/liveness timeout
 heartbeat_time: 2 # How long to wait between heartbeats
 repoll_time: 30 # How long the server will wait between latency tests etc
